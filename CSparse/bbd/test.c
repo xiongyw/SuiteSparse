@@ -36,7 +36,7 @@ int test(void)
 
     cs* A = NULL;
 
-#if (0)
+#if (1)
     // triplet-form
     cs* T = CS_load_mm(g_path);
     if (!T) {
@@ -143,12 +143,21 @@ int test(void)
     cs_spfree(LU);
     cs_spfree(diff);
 
-    // inverse of L and U: fixme!!!
+    // inverse of L
+    cs* id2 = CS_id(num->L->n);
     cs* Linv = CS_tri_inv(num->L, 1);
-    CS_dump(Linv, "Linv");
-    cs_print(Linv, 1);
+    //CS_dump(Linv, "Linv");
+    //cs_print(Linv, 1);
     cs* mul = cs_multiply(num->L, Linv);
-    cs_print(mul, 1);
+    //cs_print(mul, 1);
+    cs* Ldiff= cs_add(id2, mul, 1, -1);
+    printf("|I-L*Linv|=%g\n", cs_norm(Ldiff));
+
+    // inverse of U
+    cs* Uinv = CS_tri_inv(num->U, 0);
+    cs* Umul = cs_multiply(num->U, Uinv);
+    cs* Udiff= cs_add(id2, Umul, 1, -1);
+    printf("|I-U*Uinv|=%g\n", cs_norm(Udiff));
 
 #if (0)
     // L/U

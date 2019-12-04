@@ -327,6 +327,7 @@ cs* CS_tri_inv(cs* t, int low)
 
     // solve Lx=I, column by column
     for (int k = 0; k < id->n; k ++) {
+        memset(x, 0, sizeof(double)*t->n);  // this is needed, opposite to the book at p34
         ret = cs_spsolve(t, id, k, xi, x, NULL, low);
         assert((ret != -1) && "cs_spsolve() failure");
         for (int i = 0; i < id->n; i ++) {

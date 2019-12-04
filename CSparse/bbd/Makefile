@@ -5,7 +5,7 @@ LDLIBS += -lm
 CS = $(LDFLAGS) ../Lib/libcsparse.a $(LDLIBS)
 
 EXE = test
-SRC = test.c mmio.c
+SRC = test.c mmio.c cs_misc.c
 
 all: lib $(EXE)
 

@@ -24,13 +24,19 @@ cs     g_m = {.nzmax = 9, .nz = 9, .m=3, .n=3, .p = g_p, .i = g_i, .x = g_x};
 const char g_path[] = "../../SPQR/Matrix/lfat5b.mtx";
 
 
+int test(void);
 
-int main (void)
+int main(void)
+{
+    return test();
+}
+
+int test(void)
 {
 
     cs* A = NULL;
 
-#if (1)
+#if (0)
     // triplet-form
     cs* T = CS_load_mm(g_path);
     if (!T) {
@@ -42,6 +48,9 @@ int main (void)
     //CS_dump(T, "copy");
 #endif
 
+    // test CS_id()
+    cs* id = CS_id(5);
+    CS_dump(id, "id");
 
     // test CS_unzip()
     cs* A1 = cs_compress(T) ;
@@ -67,8 +76,6 @@ int main (void)
     cs* A9 = CS_patch(A8, R, 2, 0, 1.);
     cs* A10 = CS_patch(A9, C, 0, 2, 1.);
 #endif
-
-
 
     A = A10;
     // symbolic LU ordering and analysis
@@ -135,6 +142,13 @@ int main (void)
     printf("|A-LU|=%g\n", cs_norm(diff));
     cs_spfree(LU);
     cs_spfree(diff);
+
+    // inverse of L and U: fixme!!!
+    cs* Linv = CS_tri_inv(num->L, 1);
+    CS_dump(Linv, "Linv");
+    cs_print(Linv, 1);
+    cs* mul = cs_multiply(num->L, Linv);
+    cs_print(mul, 1);
 
 #if (0)
     // L/U

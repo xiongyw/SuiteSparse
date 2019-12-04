@@ -5,7 +5,6 @@
 #include "mmio.h"
 #include "cs_misc.h"
 
-#define CS_MISC_DEBUG  1
 
 // cf: https://math.nist.gov/MatrixMarket/mmio/c/example_read.c
 cs* CS_load_mm(const char* path)
@@ -85,9 +84,9 @@ cs* CS_unzip(const cs* A)
         return NULL;
     }
 
-    // allocate a triplet-form matrix, initially with 1 value item only
-    cs* t = cs_spalloc(A->m, A->n, A->nzmax, 1, 1);
-    assert(t && "cs_spalloc() failure");
+    // new triplet-form matrix skeleton
+    cs* t = CS_skeleton(A->m, A->n, 1);
+    assert(t && "CS_skeleton() failure");
 
     // travese the elements
     int ret;
@@ -254,6 +253,19 @@ cs* CS_skeleton(csi m, csi n, int triplet)
     return A;
 }
 
+cs* CS_id(csi n)
+{
+    int ret;
+    cs* id = CS_skeleton(n, n, 1);
+    for  (int i = 0; i < n; i ++) {
+        ret = cs_entry(id, i, i, 1.);
+        assert((ret == 1) && "cs_entry() failure!\n");
+    }
+    cs* idc = cs_compress(id);
+    cs_spfree(id);
+    return idc;
+}
+
 cs* CS_patch(const cs* A, const cs* P, csi ri, csi ci, double k)
 {
     int ret;
@@ -274,9 +286,7 @@ cs* CS_patch(const cs* A, const cs* P, csi ri, csi ci, double k)
     }
 
     // extend P to the same size of A, in triplet-form
-    cs* PP = cs_spalloc(A->m, A->n, P->nzmax,
-                             1, // allocate x[]: this necessary!
-                             1); // triplet-form
+    cs* PP = CS_skeleton(A->m, A->n, 1);
 
     // populate PP
     for (int j = 0 ; j < P->n ; ++j) {
@@ -297,4 +307,43 @@ cs* CS_patch(const cs* A, const cs* P, csi ri, csi ci, double k)
     cs_spfree(C);
 
     return AP;
+}
+
+cs* CS_tri_inv(cs* t, int low)
+{
+    int ret;
+
+    if (!t || !CS_CSC(t) || t->m != t->n) {
+        assert(t && "invalid input");
+        return NULL;
+    }
+
+    cs* id = CS_id(t->n);
+    cs* inv = CS_skeleton(t->n, t->n, 1); // triplet-form for now
+    double* x = (double*)malloc(sizeof(double)*t->n);
+    assert(x && "malloc failure!");
+    csi* xi = (csi*)malloc(sizeof(csi)*t->n*2);
+    assert(xi && "malloc failure!");
+
+    // solve Lx=I, column by column
+    for (int k = 0; k < id->n; k ++) {
+        ret = cs_spsolve(t, id, k, xi, x, NULL, low);
+        assert((ret != -1) && "cs_spsolve() failure");
+        for (int i = 0; i < id->n; i ++) {
+            if (x[i] != 0.) {
+                ret = cs_entry(inv, i, k, x[i]);
+                assert((ret == 1) && "cs_spsolve() failure");
+            }
+        }
+    }
+
+    cs* INV = cs_compress(inv);
+    assert(INV && "cs_spsolve() failure");
+
+    free(x);
+    free(xi);
+    cs_spfree(id);
+    cs_spfree(inv);
+
+    return INV;
 }

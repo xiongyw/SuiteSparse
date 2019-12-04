@@ -32,6 +32,12 @@ cs* CS_diff(const cs* A, const cs* B);
 cs* CS_skeleton(csi m, csi n, int triplet);
 
 /*
+ * get an identity matrix, compressed-form
+ * n: dimension
+ */
+cs* CS_id(csi n);
+
+/*
  * return a submatrix (compressed) from matrix A
  * ri: the row index (in A) for the 1st row
  * ci: the col index (in A) for the 1st col
@@ -55,5 +61,15 @@ cs* CS_clip(cs* A, csi ri, csi ci, csi m, csi n);
  * return NULL for failures
  */
 cs* CS_patch(const cs* A, const cs* P, csi ri, csi ci, double k);
+
+/*
+ * invert a triangular matrix
+ *
+ * G: triangular matrix
+ * lo: L or U
+ *
+ * return NULL for failures
+ */
+cs* CS_tri_inv(cs* t, int low);
 
 #endif // __CS_MISC__

@@ -1,6 +1,10 @@
 function test94
 %TEST94 test pagerank
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
+addpath ('../Demo/MATLAB') ;
 T = load ('../Demo/Matrix/west0067') ;
 n = max (max (T (:, 1:2))) + 1 ;
 A = sparse (1+T(:,1), 1+T(:,2), T(:,3), n, n) ;
@@ -34,11 +38,11 @@ t = grbresults
 
 ir_diff = length (find (ir2 ~= ir3))
 
-summary = [((r2-r3)')./(r2')  ir2' ir3' ir2'-ir3'] ; 
+% summary = [((r2-r3)')./(r2')  ir2' ir3' ir2'-ir3'] ; 
 
 C.is_csc = false ;
 
-for method = [0 1001 1002 1003]
+for method = [0 1001 1003 1004 1005]
     fprintf ('------------------ method: %d\n', method) ;
     tic ;
     [r4, ir4] = GB_mex_dpagerank (C, method) ;
@@ -48,5 +52,8 @@ for method = [0 1001 1002 1003]
     assert (isequal (ir3, ir4)) ;
 end
 
-k = min (300, n) ;
-summary (1:k,:) 
+% k = min (300, n) ;
+% summary (1:k,:) 
+
+fprintf ('test94: all tests passed\n') ;
+

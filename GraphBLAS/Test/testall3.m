@@ -1,7 +1,9 @@
 %TESTALL3 run testall with different # of threads
 
-clear all
-make
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
+clear all ; make
 grbinfo
 for k = [1 2 4]
     nthreads_set (k) ;

@@ -2,8 +2,8 @@
 // GB_AxB_dot3_one_slice: slice the entries and vectors of a single matrix
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -13,18 +13,20 @@
 // simple general-purpose method for slicing a single matrix.  It could be
 // called GB_one_slice, and used for other methods as well.
 
-#define GB_FREE_WORK \
-    GB_FREE_MEMORY (Coarse, ntasks1+1, sizeof (int64_t)) ;
+#define GB_FREE_WORK                            \
+{                                               \
+    GB_WERK_POP (Coarse, int64_t) ;             \
+}
 
-#define GB_FREE_ALL                                                     \
-{                                                                       \
-    GB_FREE_WORK ;                                                      \
-    GB_FREE_MEMORY (TaskList, max_ntasks+1, sizeof (GB_task_struct)) ;  \
+#define GB_FREE_ALL                             \
+{                                               \
+    GB_FREE_WORK ;                              \
+    GB_FREE_WERK (&TaskList, TaskList_size) ;   \
 }
 
 #include "GB_mxm.h"
 
-#define GB_TASKS_PER_THREAD 256
+#define GB_NTASKS_PER_THREAD 256
 
 //------------------------------------------------------------------------------
 // GB_AxB_dot3_one_slice
@@ -33,28 +35,35 @@
 GrB_Info GB_AxB_dot3_one_slice
 (
     // output:
-    GB_task_struct **p_TaskList,    // array of structs, of size max_ntasks
-    int *p_max_ntasks,              // size of TaskList
+    GB_task_struct **p_TaskList,    // array of structs
+    size_t *p_TaskList_size,        // size of TaskList
     int *p_ntasks,                  // # of tasks constructed
     int *p_nthreads,                // # of threads to use
     // input:
     const GrB_Matrix M,             // matrix to slice
     GB_Context Context
 )
-{ 
+{
 
     //--------------------------------------------------------------------------
     // check inputs
     //--------------------------------------------------------------------------
 
     ASSERT (p_TaskList != NULL) ;
-    ASSERT (p_max_ntasks != NULL) ;
+    ASSERT (p_TaskList_size != NULL) ;
     ASSERT (p_ntasks != NULL) ;
     ASSERT (p_nthreads != NULL) ;
-    ASSERT_OK (GB_check (M, "M for dot3_one_slice", GB0)) ;
+    ASSERT_MATRIX_OK (M, "M for dot3_one_slice", GB0) ;
+
+    // the pattern of M is not accessed
+    ASSERT (GB_ZOMBIES_OK (M)) ;
+    ASSERT (GB_JUMBLED_OK (M)) ;
+    ASSERT (GB_PENDING_OK (M)) ;
+    ASSERT (!GB_IS_BITMAP (M)) ;
+    ASSERT (!GB_IS_FULL (M)) ;
 
     (*p_TaskList  ) = NULL ;
-    (*p_max_ntasks) = 0 ;
+    (*p_TaskList_size) = 0 ;
     (*p_ntasks    ) = 0 ;
     (*p_nthreads  ) = 1 ;
 
@@ -69,21 +78,22 @@ GrB_Info GB_AxB_dot3_one_slice
     //--------------------------------------------------------------------------
 
     const int64_t *restrict Mp = M->p ;
-    const int64_t mnz = GB_NNZ (M) ;
+    const int64_t mnz = GB_NNZ_HELD (M) ;
     const int64_t mnvec = M->nvec ;
+    const int64_t mvlen = M->vlen ;
 
     //--------------------------------------------------------------------------
     // allocate the initial TaskList
     //--------------------------------------------------------------------------
 
-    int64_t *restrict Coarse = NULL ;
+    GB_WERK_DECLARE (Coarse, int64_t) ;
     int ntasks1 = 0 ;
     int nthreads = GB_nthreads (mnz, chunk, nthreads_max) ;
-    GB_task_struct *restrict TaskList = NULL ;
+    GB_task_struct *restrict TaskList = NULL ; size_t TaskList_size = 0 ;
     int max_ntasks = 0 ;
     int ntasks = 0 ;
-    int ntasks0 = (nthreads == 1) ? 1 : (GB_TASKS_PER_THREAD * nthreads) ;
-    GB_REALLOC_TASK_LIST (TaskList, ntasks0, max_ntasks) ;
+    int ntasks0 = (nthreads == 1) ? 1 : (GB_NTASKS_PER_THREAD * nthreads) ;
+    GB_REALLOC_TASK_WERK (TaskList, ntasks0, max_ntasks) ;
 
     //--------------------------------------------------------------------------
     // check for quick return for a single task
@@ -95,7 +105,7 @@ GrB_Info GB_AxB_dot3_one_slice
         TaskList [0].kfirst = 0 ;
         TaskList [0].klast  = mnvec-1 ;
         (*p_TaskList  ) = TaskList ;
-        (*p_max_ntasks) = max_ntasks ;
+        (*p_TaskList_size) = TaskList_size ;
         (*p_ntasks    ) = (mnvec == 0) ? 0 : 1 ;
         (*p_nthreads  ) = 1 ;
         return (GrB_SUCCESS) ;
@@ -114,12 +124,14 @@ GrB_Info GB_AxB_dot3_one_slice
     // slice the work into coarse tasks
     //--------------------------------------------------------------------------
 
-    if (!GB_pslice (&Coarse, Mp, mnvec, ntasks1))
-    {
+    GB_WERK_PUSH (Coarse, ntasks1 + 1, int64_t) ;
+    if (Coarse == NULL)
+    { 
         // out of memory
         GB_FREE_ALL ;
-        return (GB_OUT_OF_MEMORY) ;
+        return (GrB_OUT_OF_MEMORY) ;
     }
+    GB_pslice (Coarse, Mp, mnvec, ntasks1, false) ;
 
     //--------------------------------------------------------------------------
     // construct all tasks, both coarse and fine
@@ -154,7 +166,7 @@ GrB_Info GB_AxB_dot3_one_slice
 
             // This is a non-empty coarse-grain task that does two or more
             // entire vectors of M and C, vectors k:klast, inclusive.
-            GB_REALLOC_TASK_LIST (TaskList, ntasks + 1, max_ntasks) ;
+            GB_REALLOC_TASK_WERK (TaskList, ntasks + 1, max_ntasks) ;
             TaskList [ntasks].kfirst = k ;
             TaskList [ntasks].klast  = klast ;
             ntasks++ ;
@@ -191,12 +203,12 @@ GrB_Info GB_AxB_dot3_one_slice
             // determine the # of fine-grain tasks to create for vector k
             //------------------------------------------------------------------
 
-            int64_t mknz = Mp [k+1] - Mp [k] ;
+            int64_t mknz = (Mp == NULL) ? mvlen : (Mp [k+1] - Mp [k]) ;
             int nfine = ((double) mknz) / target_task_size ;
             nfine = GB_IMAX (nfine, 1) ;
 
             // make the TaskList bigger, if needed
-            GB_REALLOC_TASK_LIST (TaskList, ntasks + nfine, max_ntasks) ;
+            GB_REALLOC_TASK_WERK (TaskList, ntasks + nfine, max_ntasks) ;
 
             //------------------------------------------------------------------
             // create the fine-grain tasks
@@ -233,8 +245,9 @@ GrB_Info GB_AxB_dot3_one_slice
                     // slice M(:,k) for this task
                     int64_t p1, p2 ;
                     GB_PARTITION (p1, p2, mknz, tfine, nfine) ;
-                    int64_t pM     = Mp [k] + p1 ;
-                    int64_t pM_end = Mp [k] + p2 ;
+                    int64_t pM_start = GBP (Mp, k, mvlen) ;
+                    int64_t pM     = pM_start + p1 ;
+                    int64_t pM_end = pM_start + p2 ;
                     TaskList [ntasks].pM     = pM ;
                     TaskList [ntasks].pM_end = pM_end ;
 
@@ -253,7 +266,7 @@ GrB_Info GB_AxB_dot3_one_slice
 
     GB_FREE_WORK ;
     (*p_TaskList  ) = TaskList ;
-    (*p_max_ntasks) = max_ntasks ;
+    (*p_TaskList_size) = TaskList_size ;
     (*p_ntasks    ) = ntasks ;
     (*p_nthreads  ) = nthreads ;
     return (GrB_SUCCESS) ;

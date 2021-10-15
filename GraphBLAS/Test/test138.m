@@ -1,6 +1,9 @@
 function test138
 %TEST138 test assign, with coarse-only tasks in IxJ slice
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 rng ('default') ;
 
 [save_nthreads save_chunk] = nthreads_get ;

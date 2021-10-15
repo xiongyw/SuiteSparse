@@ -1,6 +1,9 @@
 function test96
 %TEST96 test dot product
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 n = 1000 ;
 A = sprandn (n, n, 0.5) ;
 B = sprandn (n, n, 0.5) ;

@@ -2,8 +2,8 @@
 // GB_mex_band: C = tril (triu (A,lo), hi), or with A'
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -11,17 +11,17 @@
 
 #include "GB_mex.h"
 
-#define USAGE "C = GB_mex_band (A, lo, hi, atranspose, pre)"
+#define USAGE "C = GB_mex_band (A, lo, hi, atranspose)"
 
 #define FREE_ALL                        \
 {                                       \
-    GB_SCALAR_FREE (&Thunk) ;           \
-    GB_MATRIX_FREE (&C) ;               \
-    GB_MATRIX_FREE (&A) ;               \
-    GrB_free (&Thunk_type) ;            \
-    GrB_free (&op) ;                    \
-    GrB_free (&desc) ;                  \
-    GB_mx_put_global (true, 0) ;        \
+    GxB_Scalar_free_(&Thunk) ;          \
+    GrB_Matrix_free_(&C) ;              \
+    GrB_Matrix_free_(&A) ;              \
+    GxB_Scalar_free_(&Thunk_type) ;     \
+    GxB_SelectOp_free_(&op) ;           \
+    GrB_Descriptor_free_(&desc) ;       \
+    GB_mx_put_global (true) ;           \
 }
 
 #define OK(method)                                      \
@@ -30,7 +30,6 @@
     if (info != GrB_SUCCESS)                            \
     {                                                   \
         FREE_ALL ;                                      \
-        printf ("%s\n", GrB_error ()) ;                 \
         mexErrMsgTxt ("GraphBLAS failed") ;             \
     }                                                   \
 }
@@ -41,11 +40,11 @@ typedef struct
     int64_t hi ;
 } LoHi_type ; 
 
-bool band (GrB_Index i, GrB_Index j, GrB_Index nrows,
-    GrB_Index ncols, /* x is unused: */ const void *x, const LoHi_type *thunk) ;
+bool LoHi_band (GrB_Index i, GrB_Index j,
+    /* x is unused: */ const void *x, const LoHi_type *thunk) ;
 
-bool band (GrB_Index i, GrB_Index j, GrB_Index nrows,
-    GrB_Index ncols, /* x is unused: */ const void *x, const LoHi_type *thunk)
+bool LoHi_band (GrB_Index i, GrB_Index j,
+    /* x is unused: */ const void *x, const LoHi_type *thunk)
 {
     int64_t i2 = (int64_t) i ;
     int64_t j2 = (int64_t) j ;
@@ -76,8 +75,7 @@ void mexFunction
     #define FREE_DEEP_COPY ;
 
     // check inputs
-    GB_WHERE (USAGE) ;
-    if (nargout > 1 || nargin < 3 || nargin > 5)
+    if (nargout > 1 || nargin < 3 || nargin > 4)
     {
         mexErrMsgTxt ("Usage: " USAGE) ;
     }
@@ -91,13 +89,8 @@ void mexFunction
     }
 
     // create the Thunk
-    #ifdef MY_BAND
-    Thunk_type = My_bandwidth_type ;
-    my_bandwidth_type bandwidth ;
-    #else
     LoHi_type bandwidth  ;
     OK (GrB_Type_new (&Thunk_type, sizeof (LoHi_type))) ;
-    #endif
 
     // get lo and hi
     bandwidth.lo = (int64_t) mxGetScalar (pargin [1]) ;
@@ -105,9 +98,7 @@ void mexFunction
 
     OK (GxB_Scalar_new (&Thunk, Thunk_type)) ;
     OK (GxB_Scalar_setElement_UDT (Thunk, (void *) &bandwidth)) ;
-    GrB_Index ignore ;
-    OK (GxB_Scalar_nvals (&ignore, Thunk)) ;
-    // GxB_print (Thunk, 3) ;
+    OK (GxB_Scalar_wait_(&Thunk)) ;
 
     // get atranspose
     bool atranspose = false ;
@@ -115,27 +106,22 @@ void mexFunction
     if (atranspose)
     {
         OK (GrB_Descriptor_new (&desc)) ;
-        OK (GxB_set (desc, GrB_INP0, GrB_TRAN)) ;
+        OK (GxB_Desc_set (desc, GrB_INP0, GrB_TRAN)) ;
     }
-
-    // get the pre/run-time option
-    int GET_SCALAR (4, int, pre, 0) ;
 
     GB_MEX_TIC ;
 
     // create operator
-    op = NULL ;
-    if (pre)
+    // use the user-defined operator, from the LoHi_band function
+    METHOD (GxB_SelectOp_new (&op, (GxB_select_function) LoHi_band,
+        NULL, Thunk_type)) ;
+
+    GrB_Index nrows, ncols ;
+    GrB_Matrix_nrows (&nrows, A) ;
+    GrB_Matrix_ncols (&ncols, A) ;
+    if (bandwidth.lo == 0 && bandwidth.hi == 0 && nrows == 10 && ncols == 10)
     {
-        // use the compile-time defined operator, My_band
-        #ifdef MY_BAND
-        op = My_band ;
-        #endif
-    }
-    if (op == NULL)
-    {
-        // use the run-time defined operator, from the band function
-        METHOD (GxB_SelectOp_new (&op, band, NULL, Thunk_type)) ;
+        GxB_SelectOp_fprint_ (op, 3, NULL) ;
     }
 
     // create result matrix C
@@ -152,12 +138,12 @@ void mexFunction
     if (GB_NCOLS (C) == 1 && !atranspose)
     {
         // this is just to test the Vector version
-        OK (GxB_select ((GrB_Vector) C, NULL, NULL, op, (GrB_Vector) A,
+        OK (GxB_Vector_select_((GrB_Vector) C, NULL, NULL, op, (GrB_Vector) A,
             Thunk, NULL)) ;
     }
     else
     {
-        OK (GxB_select (C, NULL, NULL, op, A, Thunk, desc)) ;
+        OK (GxB_Matrix_select_(C, NULL, NULL, op, A, Thunk, desc)) ;
     }
 
     GB_MEX_TOC ;

@@ -2,6 +2,9 @@ function C = rowscale (A)
 %ROWSCALE row scale an adjacency matrix by out-degree
 % C = rowscale (A)
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 % scale the adjacency matrix by out-degree
 dout = sum (A,2) ;              % dout(i) is the out-degree of node i
 is_nonempty = (dout > 0) ;      % find vertices with outgoing edges

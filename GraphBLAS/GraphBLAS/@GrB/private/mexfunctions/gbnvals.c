@@ -2,15 +2,21 @@
 // gbnvals: number of entries in a GraphBLAS matrix struct
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 //------------------------------------------------------------------------------
 
 // The input may be either a GraphBLAS matrix struct or a standard MATLAB
 // sparse matrix.
 
+// Usage
+
+// nvals = gbnvals (X)
+
 #include "gb_matlab.h"
+
+#define USAGE "usage: nvals = gbnvals (X)"
 
 void mexFunction
 (
@@ -25,17 +31,27 @@ void mexFunction
     // check inputs
     //--------------------------------------------------------------------------
 
-    gb_usage (nargin == 1 && nargout <= 1, "usage: nvals = GrB.nvals (X)") ;
+    gb_usage (nargin == 1 && nargout <= 1, USAGE) ;
+
+    //--------------------------------------------------------------------------
+    // get a shallow copy of the matrix
+    //--------------------------------------------------------------------------
+
+    GrB_Matrix X = gb_get_shallow (pargin [0]) ;
 
     //--------------------------------------------------------------------------
     // get the # of entries in the matrix
     //--------------------------------------------------------------------------
 
-    GrB_Matrix X = gb_get_shallow (pargin [0]) ;
     GrB_Index nvals ;
     OK (GrB_Matrix_nvals (&nvals, X)) ;
+
+    //--------------------------------------------------------------------------
+    // free the shallow copy and return the result
+    //--------------------------------------------------------------------------
+
     pargout [0] = mxCreateDoubleScalar ((double) nvals) ;
-    OK (GrB_free (&X)) ;
+    OK (GrB_Matrix_free (&X)) ;
     GB_WRAPUP ;
 }
 

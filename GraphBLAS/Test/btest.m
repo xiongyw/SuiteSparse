@@ -1,5 +1,8 @@
 % test GrB_build
-clear all
+
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 nthreads_set(2)
 grbinfo
 test56

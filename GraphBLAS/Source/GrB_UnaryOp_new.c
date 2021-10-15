@@ -2,8 +2,8 @@
 // GrB_UnaryOp_new: create a new user-defined unary operator
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -15,8 +15,9 @@
 
 // the macro version of this function must first be #undefined
 #undef GrB_UnaryOp_new
+#undef GrM_UnaryOp_new
 
-GrB_Info GrB_UnaryOp_new            // create a new user-defined unary operator
+GrB_Info GRB (UnaryOp_new)          // create a new user-defined unary operator
 (
     GrB_UnaryOp *unaryop,           // handle for the new unary operator
     GxB_unary_function function,    // pointer to the unary function
@@ -24,6 +25,6 @@ GrB_Info GrB_UnaryOp_new            // create a new user-defined unary operator
     GrB_Type xtype                  // type of input x
 )
 { 
-    return (GB_UnaryOp_new (unaryop, function, ztype, xtype, "f")) ;
+    return (GB_UnaryOp_new (unaryop, function, ztype, xtype, NULL)) ;
 }
 

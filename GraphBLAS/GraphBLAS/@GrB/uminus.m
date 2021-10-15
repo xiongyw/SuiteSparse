@@ -1,9 +1,12 @@
 function C = uminus (G)
-%UMINUS negate a GraphBLAS sparse matrix.
-% C = -G negates the entries of a GraphBLAS matrix.
+%UMINUS negate a matrix.
+% C = -G negates the entries of the matrix G.
+%
+% See also GrB.apply, GrB/minus, GrB/uplus.
 
-% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-% http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: GPL-3.0-or-later
 
-C = GrB.apply ('-', G) ;
+G = G.opaque ;
+C = GrB (gbapply ('-', G)) ;
 

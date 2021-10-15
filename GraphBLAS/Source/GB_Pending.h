@@ -1,35 +1,15 @@
 //------------------------------------------------------------------------------
-// GB_Pending.h: data structure and operations for pending tuples
+// GB_Pending.h: operations for pending tuples
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
 #ifndef GB_PENDING_H
 #define GB_PENDING_H
 #include "GB.h"
-
-//------------------------------------------------------------------------------
-// GB_Pending data structure
-//------------------------------------------------------------------------------
-
-struct GB_Pending_struct    // list of pending tuples for a matrix
-{
-    int64_t n ;         // number of pending tuples to add to matrix
-    int64_t nmax ;      // size of i,j,x
-    bool sorted ;       // true if pending tuples are in sorted order
-    int64_t *i ;        // row indices of pending tuples
-    int64_t *j ;        // col indices of pending tuples; NULL if A->vdim <= 1
-    GB_void *x ;        // values of pending tuples
-    GrB_Type type ;     // the type of s
-    size_t size ;       // type->size
-    GrB_BinaryOp op ;   // operator to assemble pending tuples
-} ;
-
-// initial size of the pending tuples
-#define GB_PENDING_INIT 256
 
 //------------------------------------------------------------------------------
 // GB_Pending functions
@@ -44,10 +24,11 @@ bool GB_Pending_alloc       // create a list of pending tuples
     int64_t nmax            // # of pending tuples to hold
 ) ;
 
-bool GB_Pending_realloc     // reallocate a list of pending tuples
+bool GB_Pending_realloc         // reallocate a list of pending tuples
 (
-    GB_Pending *PHandle,    // Pending tuple list to reallocate
-    int64_t nnew            // # of new tuples to accomodate
+    GB_Pending *PHandle,        // Pending tuple list to reallocate
+    int64_t nnew,               // # of new tuples to accomodate
+    GB_Context Context
 ) ;
 
 void GB_Pending_free        // free a list of pending tuples
@@ -67,7 +48,8 @@ static inline bool GB_Pending_ensure
     GrB_Type type,          // type of pending tuples
     GrB_BinaryOp op,        // operator for assembling pending tuples
     bool is_matrix,         // true if Pending->j must be allocated
-    int64_t nnew            // # of pending tuples to add
+    int64_t nnew,           // # of pending tuples to add
+    GB_Context Context
 )
 {
 
@@ -87,7 +69,7 @@ static inline bool GB_Pending_ensure
     }
     else
     {
-        return (GB_Pending_realloc (PHandle, nnew)) ;
+        return (GB_Pending_realloc (PHandle, nnew, Context)) ;
     }
 }
 
@@ -103,7 +85,8 @@ static inline bool GB_Pending_add   // add a tuple to the list
     const GrB_BinaryOp op,      // new Pending->op, if list is created
     const int64_t i,            // index into vector
     const int64_t j,            // vector index
-    const bool is_matrix        // allocate Pending->j, if list is created
+    const bool is_matrix,       // allocate Pending->j, if list is created
+    GB_Context Context
 )
 {
 
@@ -117,7 +100,7 @@ static inline bool GB_Pending_add   // add a tuple to the list
     // allocate the Pending tuples, or ensure existing list is large enough
     //--------------------------------------------------------------------------
 
-    if (!GB_Pending_ensure (PHandle, type, op, is_matrix, 1))
+    if (!GB_Pending_ensure (PHandle, type, op, is_matrix, 1, Context))
     {
         return (false) ;
     }
@@ -164,8 +147,8 @@ static inline bool GB_Pending_add   // add a tuple to the list
 // add (iC,jC,aij) or just (iC,aij) if Pending_j is NULL
 //------------------------------------------------------------------------------
 
-// GB_PENDING_INSERT(aij) is used by GB_subassign to insert a pending tuple, in
-// phase 2.  The list has already been reallocated after phase 1 to hold all
+// GB_PENDING_INSERT(aij) is used by GB_subassign_* to insert a pending tuple,
+// in phase 2.  The list has already been reallocated after phase 1 to hold all
 // the new pending tuples, so GB_Pending_realloc is not required.
 
 #define GB_PENDING_INSERT(aij)                                              \
@@ -182,6 +165,30 @@ static inline bool GB_Pending_add   // add a tuple to the list
     n++ ;                                                                   \
     ilast = iC ;                                                            \
     jlast = jC ;
+
+//------------------------------------------------------------------------------
+// GB_shall_block: see if the matrix should be finished
+//------------------------------------------------------------------------------
+
+// returns true if GB_Matrix_wait should be done
+
+static inline bool GB_shall_block
+(
+    GrB_Matrix A
+)
+{ 
+
+    if (!GB_ANY_PENDING_WORK (A))
+    { 
+        // no pending work, so no need to block
+        return (false) ;
+    }
+    double npending = (double) GB_Pending_n (A) ;
+    double anzmax = ((double) A->vlen) * ((double) A->vdim) ;
+    bool many_pending = (npending >= anzmax) ;
+    bool blocking = (GB_Global_mode_get ( ) == GrB_BLOCKING) ;
+    return (many_pending || blocking) ;
+}
 
 #endif
 

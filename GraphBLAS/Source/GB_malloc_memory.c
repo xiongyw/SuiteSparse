@@ -1,32 +1,88 @@
 //------------------------------------------------------------------------------
-// GB_malloc_memory: wrapper for malloc_function
+// GB_malloc_memory: wrapper for malloc
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
-// A wrapper for malloc_function.  Space is not initialized.
-
-// This function is called via the GB_MALLOC_MEMORY(p,n,s) macro.
-
-// Parameters are the same as the POSIX calloc, except that asking to allocate
-// a block of zero size causes a block of size 1 to be allocated instead.  This
-// allows the return pointer p to be checked for the out-of-memory condition,
-// even when allocating an object of size zero.
-
-// to turn on memory usage debug printing, uncomment this line:
-// #define GB_PRINT_MALLOC 1
+// A wrapper for malloc.  Space is not initialized.
 
 #include "GB.h"
 
+//------------------------------------------------------------------------------
+// GB_malloc_helper:  use malloc to allocate an uninitialized memory block
+//------------------------------------------------------------------------------
+
+static inline void *GB_malloc_helper
+(
+    // input/output:
+    size_t *size,           // on input: # of bytes requested
+                            // on output: # of bytes actually allocated
+    // input:
+    bool malloc_tracking
+)
+{
+    void *p = NULL ;
+
+    // determine the next higher power of 2
+    (*size) = GB_IMAX (*size, 8) ;
+    int k = GB_CEIL_LOG2 (*size) ;
+
+    // if available, get the block from the pool
+    if (GB_Global_free_pool_limit_get (k) > 0)
+    {
+        // round up the size to the nearest power of two
+        (*size) = ((size_t) 1) << k ;
+        p = GB_Global_free_pool_get (k) ;
+//      if (p != NULL) printf ("malloc from pool: %p %ld\n", p, *size) ;
+    }
+
+    if (p == NULL)
+    {
+        // no block in the free_pool, so allocate it
+
+//          if (GB_Global_rmm_get ( ))
+//          {
+//              p = GB_rmm_alloc (size) ;
+//          }
+//          else
+            {
+                p = GB_Global_malloc_function (*size) ;
+            }
+
+        if (p != NULL && malloc_tracking)
+        { 
+            // success
+            GB_Global_nmalloc_increment ( ) ;
+        }
+//      printf ("hard malloc %p %ld\n", p, *size) ;
+    }
+//  GB_Global_free_pool_dump (2) ; GB_Global_memtable_dump ( ) ;
+
+    return (p) ;
+}
+
+//------------------------------------------------------------------------------
+// GB_malloc_memory
+//------------------------------------------------------------------------------
+
+GB_PUBLIC   // accessed by the MATLAB tests in GraphBLAS/Test only
 void *GB_malloc_memory      // pointer to allocated block of memory
 (
     size_t nitems,          // number of items to allocate
-    size_t size_of_item     // sizeof each item
+    size_t size_of_item,    // sizeof each item
+    // output
+    size_t *size_allocated  // # of bytes actually allocated
 )
 {
+
+    //--------------------------------------------------------------------------
+    // check inputs
+    //--------------------------------------------------------------------------
+
+    ASSERT (size_allocated != NULL) ;
 
     void *p ;
     size_t size ;
@@ -38,93 +94,59 @@ void *GB_malloc_memory      // pointer to allocated block of memory
     size_of_item = GB_IMAX (1, size_of_item) ;
 
     bool ok = GB_size_t_multiply (&size, nitems, size_of_item) ;
-    if (!ok || nitems > GB_INDEX_MAX || size_of_item > GB_INDEX_MAX)
+    if (!ok || nitems > GxB_INDEX_MAX || size_of_item > GxB_INDEX_MAX)
     { 
         // overflow
-        p = NULL ;
+        (*size_allocated) = 0 ;
+        return (NULL) ;
+    }
+
+    //--------------------------------------------------------------------------
+    // allocate the memory block
+    //--------------------------------------------------------------------------
+
+    if (GB_Global_malloc_tracking_get ( ))
+    {
+
+        //----------------------------------------------------------------------
+        // for memory usage testing only
+        //----------------------------------------------------------------------
+
+        // brutal memory debug; pretend to fail if (count-- <= 0).
+        bool pretend_to_fail = false ;
+        if (GB_Global_malloc_debug_get ( ))
+        {
+            pretend_to_fail = GB_Global_malloc_debug_count_decrement ( ) ;
+        }
+
+        // allocate the memory
+        if (pretend_to_fail)
+        { 
+            p = NULL ;
+        }
+        else
+        { 
+            p = GB_malloc_helper (&size, true) ;
+        }
+
     }
     else
     { 
 
-        if (GB_Global_malloc_tracking_get ( ))
-        {
+        //----------------------------------------------------------------------
+        // normal use, in production
+        //----------------------------------------------------------------------
 
-            //------------------------------------------------------------------
-            // for memory usage testing only
-            //------------------------------------------------------------------
-
-            // brutal memory debug; pretend to fail if (count-- <= 0)
-            bool pretend_to_fail = false ;
-            bool malloc_debug = false ;
-            #define GB_CRITICAL_SECTION                                      \
-            {                                                                \
-                malloc_debug = GB_Global_malloc_debug_get ( ) ;              \
-                if (malloc_debug)                                            \
-                {                                                            \
-                    pretend_to_fail =                                        \
-                        GB_Global_malloc_debug_count_decrement ( ) ;         \
-                }                                                            \
-            }
-            #include "GB_critical_section.c"
-
-            // allocate the memory
-            if (pretend_to_fail)
-            { 
-                #ifdef GB_PRINT_MALLOC
-                printf ("pretend to fail\n") ;
-                #endif
-                p = NULL ;
-            }
-            else
-            { 
-                p = (void *) GB_Global_malloc_function (size) ;
-            }
-
-            // check if successful
-            if (p != NULL)
-            { 
-                // success
-                #undef GB_CRITICAL_SECTION
-
-                #ifdef GB_PRINT_MALLOC
-
-                    int nmalloc = 0 ;
-                    #define GB_CRITICAL_SECTION                             \
-                    {                                                       \
-                        nmalloc = GB_Global_nmalloc_increment ( ) ;         \
-                        GB_Global_inuse_increment (nitems * size_of_item) ; \
-                    }
-
-                #else
-
-                    #define GB_CRITICAL_SECTION                             \
-                    {                                                       \
-                        GB_Global_nmalloc_increment ( ) ;                   \
-                        GB_Global_inuse_increment (nitems * size_of_item) ; \
-                    }
-
-                #endif
-
-                #include "GB_critical_section.c"
-                #ifdef GB_PRINT_MALLOC
-                printf ("%14p Malloc:  %3d %1d n "GBd" size "GBd"\n", p,
-                    nmalloc, malloc_debug, (int64_t) nitems,
-                    (int64_t) size_of_item) ;
-                #endif
-            }
-
-        }
-        else
-        { 
-
-            //------------------------------------------------------------------
-            // normal use, in production
-            //------------------------------------------------------------------
-
-            p = (void *) GB_Global_malloc_function (size) ;
-        }
-
+        p = GB_malloc_helper (&size, false) ;
     }
+
+    //--------------------------------------------------------------------------
+    // return result
+    //--------------------------------------------------------------------------
+
+    (*size_allocated) = (p == NULL) ? 0 : size ;
+    ASSERT (GB_IMPLIES (p != NULL, size == GB_Global_memtable_size (p))) ;
+//  GB_Global_free_pool_dump (2) ;
     return (p) ;
 }
 

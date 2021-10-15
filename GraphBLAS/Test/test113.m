@@ -1,6 +1,9 @@
 function test113
 %TEST113 performance tests for GrB_kron
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 fprintf ('test113: performance tests for GrB_kron\n') ;
 
 [save save_chunk] = nthreads_get ;

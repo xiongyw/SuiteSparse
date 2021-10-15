@@ -1,6 +1,9 @@
 function test110
 %TEST110 test accum/mask (binary search of M(:,j))
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 fprintf ('\ntest110:  test accum/mask (binary search of M(:,j))\n') ;
 
 rng ('default')
@@ -17,7 +20,7 @@ C1 = GB_mex_apply  (C, M, 'plus', 'identity', A) ;
 C2 = GB_spec_apply (C, M, 'plus', 'identity', A, [ ]) ;
 GB_spec_compare (C1,C2) ;
 
-d.mask = 'scmp' ;
+d.mask = 'complement' ;
 
 C1 = GB_mex_apply  (C, M, 'plus', 'identity', A, d) ;
 C2 = GB_spec_apply (C, M, 'plus', 'identity', A, d) ;

@@ -2,24 +2,20 @@
 // GB_Semiring_check: check and print a semiring
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
-// for additional diagnostics, use:
-// #define GB_DEVELOPER 1
+#include "GB.h"
 
-#include "GB_printf.h"
-
+GB_PUBLIC   // accessed by the MATLAB tests in GraphBLAS/Test only
 GrB_Info GB_Semiring_check          // check a GraphBLAS semiring
 (
     const GrB_Semiring semiring,    // GraphBLAS semiring to print and check
     const char *name,               // name of the semiring, optional
-    int pr,                         // 0: print nothing, 1: print header and
-                                    // errors, 2: print brief, 3: print all
-    FILE *f,                        // file for output
-    GB_Context Context
+    int pr,                         // print level
+    FILE *f                         // file for output
 )
 {
 
@@ -27,11 +23,10 @@ GrB_Info GB_Semiring_check          // check a GraphBLAS semiring
     // check inputs
     //--------------------------------------------------------------------------
 
-    GBPR0 ("\n    GraphBLAS Semiring: %s ", GB_NAME) ;
+    GBPR0 ("\n    GraphBLAS Semiring: %s ", ((name != NULL) ? name : "")) ;
 
     if (semiring == NULL)
     { 
-        // GrB_error status not modified since this may be an optional argument
         GBPR0 ("NULL\n") ;
         return (GrB_NULL_POINTER) ;
     }
@@ -41,42 +36,21 @@ GrB_Info GB_Semiring_check          // check a GraphBLAS semiring
     //--------------------------------------------------------------------------
 
     GB_CHECK_MAGIC (semiring, "Semiring") ;
-
-    switch (semiring->object_kind)
-    {
-        case GB_BUILTIN:
-            GBPR0 ("(built-in)") ;
-            break ;
-
-        case GB_USER_COMPILED:
-            GBPR0 ("(user-defined at compile-time)") ;
-            break ;
-
-        case GB_USER_RUNTIME:
-            GBPR0 ("(user-defined at run-time)") ;
-            break ;
-
-        default:
-            return (GB_ERROR (GrB_INVALID_OBJECT, (GB_LOG,
-                "Semiring->object_kind is invalid: [%s]", GB_NAME))) ;
-    }
+    GBPR0 (semiring->header_size > 0 ? "(user-defined)" : "(built-in)") ;
 
     GrB_Info info ;
-    info = GB_Monoid_check (semiring->add, "semiring->add", pr, f, Context) ;
+    info = GB_Monoid_check (semiring->add, "semiring->add", pr, f) ;
     if (info != GrB_SUCCESS)
     { 
         GBPR0 ("    Semiring->add invalid\n") ;
-        return (GB_ERROR (GrB_INVALID_OBJECT, (GB_LOG,
-            "Semiring->add is an invalid monoid: [%s]", GB_NAME))) ;
+        return (GrB_INVALID_OBJECT) ;
     }
 
-    info = GB_BinaryOp_check (semiring->multiply, "semiring->multiply", pr, f,
-        Context) ;
+    info = GB_BinaryOp_check (semiring->multiply, "semiring->multiply", pr, f) ;
     if (info != GrB_SUCCESS)
     { 
         GBPR0 ("    Semiring->multiply invalid\n") ;
-        return (GB_ERROR (GrB_INVALID_OBJECT, (GB_LOG,
-            "Semiring->multiply is an invalid operator: [%s]", GB_NAME))) ;
+        return (GrB_INVALID_OBJECT) ;
     }
 
     // z = multiply(x,y); type of z must match monoid type
@@ -84,9 +58,7 @@ GrB_Info GB_Semiring_check          // check a GraphBLAS semiring
     { 
         GBPR0 ("    Semiring multiply output domain must match monoid"
             " domain\n") ;
-        return (GB_ERROR (GrB_INVALID_OBJECT, (GB_LOG,
-            "Semiring multiply output domain must match monoid domain: [%s]",
-            GB_NAME))) ;
+        return (GrB_INVALID_OBJECT) ;
     }
 
     return (GrB_SUCCESS) ;

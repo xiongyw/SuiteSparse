@@ -1,10 +1,9 @@
 function gbtest3
 %GBTEST3 test dnn
 
-% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-% http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: GPL-3.0-or-later
 
-fprintf ('gbtest3: testing sparse deep neural network\n') ;
 help GrB.dnn
 
 rng ('default') ;
@@ -13,7 +12,7 @@ nfeatures = 6 ;
 nneurons = 16 ;
 
 for level = 1:levels
-    W {level} = sprand (nneurons, nneurons, 0.5) ;
+    W {level} = sprand (nneurons, nneurons, 0.5) ; %#ok<*AGROW>
     bias {level} = -0.3 * ones (1, nneurons) ;
 end
 

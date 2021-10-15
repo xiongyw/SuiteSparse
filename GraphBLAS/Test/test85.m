@@ -1,6 +1,9 @@
 function test85
 %TEST85 test GrB_transpose: 1-by-n with typecasting
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 A.matrix = sparse ([ 1 2 3 4]) ;
 A.class  = 'single' ;
 

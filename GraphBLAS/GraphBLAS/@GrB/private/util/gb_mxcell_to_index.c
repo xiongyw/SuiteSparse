@@ -2,8 +2,8 @@
 // gb_mxcell_to_index: convert cell array to index list I or colon expression
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 //------------------------------------------------------------------------------
 
@@ -11,9 +11,9 @@
 
 // I is a cell array.  I contains 0, 1, 2, or 3 items:
 //
-//      0:   { }    This is the MATLAB ':', like C(:,J), refering to all m rows,
+//      0:  { }     This is the MATLAB ':', like C(:,J), refering to all m rows,
 //                  if C is m-by-n.
-//      1:   { list }  A 1D list of row indices, like C(I,J) in MATLAB.
+//      1:  { list }  A 1D list of row indices, like C(I,J) in MATLAB.
 //      2:  { start,fini }  start and fini are scalars (either double, int64,
 //                  or uint64).  This defines I = start:fini in MATLAB colon
 //                  notation.
@@ -54,8 +54,8 @@ GrB_Index *gb_mxcell_to_index   // return index list I
     for (int k = 0 ; k < len ; k++)
     { 
         // convert I_cell {k} content to an integer list
-        Item [k] = gb_mxarray_to_list (mxGetCell (I_cell, k), base,
-            &Item_allocated [k], &Item_len [k], &Item_max [k]) ;
+        Item [k] = (GrB_Index *) gb_mxarray_to_list (mxGetCell (I_cell, k),
+            base, &Item_allocated [k], &Item_len [k], &Item_max [k]) ;
     }
 
     //--------------------------------------------------------------------------
@@ -98,11 +98,12 @@ GrB_Index *gb_mxcell_to_index   // return index list I
         CHECK_ERROR (Item_len [0] != 1 || Item_len [1] != 1,
             "start and fini must be scalars for start:fini") ;
 
-        I = mxCalloc (3, sizeof (GrB_Index)) ;
+        I = mxMalloc (3 * sizeof (GrB_Index)) ;
         (*I_allocated) = true ;
 
         I [GxB_BEGIN] = Item [0][0] ;
         I [GxB_END  ] = Item [1][0] ;
+        I [GxB_INC  ] = 0 ;             // unused
 
         if (Item_allocated [0]) gb_mxfree (& (Item [0])) ;
         if (Item_allocated [1]) gb_mxfree (& (Item [1])) ;
@@ -121,11 +122,12 @@ GrB_Index *gb_mxcell_to_index   // return index list I
             Item_len [2] != 1,
             "start, inc, and fini must be scalars for start:inc:fini") ;
 
-        I = mxCalloc (3, sizeof (GrB_Index)) ;
+        I = mxMalloc (3 * sizeof (GrB_Index)) ;
         (*I_allocated) = true ;
 
         I [GxB_BEGIN] = Item [0][0] ;
         I [GxB_END  ] = Item [2][0] ;
+        I [GxB_INC  ] = 0 ;
         int64_t inc = Item [1][0] ;
 
         if (Item_allocated [1])

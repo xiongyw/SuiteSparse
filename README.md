@@ -1,19 +1,21 @@
 -----------------------------------------------------------------------------
-SuiteSparse:  A Suite of Sparse matrix packages at http://www.suitesparse.com
+SuiteSparse:  A Suite of Sparse matrix packages at http://suitesparse.com
 -----------------------------------------------------------------------------
 
-Oct 20, 2019.  SuiteSparse VERSION 5.6.0
+May 17, 2021.  SuiteSparse VERSION 5.10.1
 
-Now includes GraphBLAS and a new interface to the SuiteSparse Matrix
-Collection (ssget), via MATLAB and a Java GUI, to http://sparse.tamu.edu.
+    Now includes GraphBLAS, SLIP_LU, and a new interface to the SuiteSparse
+    Matrix Collection (ssget), via MATLAB and a Java GUI, to
+    http://sparse.tamu.edu.
 
 Primary author of SuiteSparse (codes and algorithms, excl. METIS): Tim Davis
 
 Code co-authors, in alphabetical order (not including METIS):
 
-    Patrick Amestoy, David Bateman, Yanqing Chen, Iain Duff, Les Foster,
-    William Hager, Scott Kolodziej, Stefan Larimore, Ekanathan Palamadai,
-    Sivasankaran Rajamanickam, Sanjay Ranka, Wissam Sid-Lakhdar, Nuri Yeralan.
+    Patrick Amestoy, David Bateman, Jinhao Chen.  Yanqing Chen, Iain Duff,
+    Les Foster, William Hager, Scott Kolodziej, Chris Lourenco, Stefan
+    Larimore, Erick Moreno-Centeno, Ekanathan Palamadai, Sivasankaran
+    Rajamanickam, Sanjay Ranka, Wissam Sid-Lakhdar, Nuri Yeralan.
 
 Additional algorithm designers: Esmond Ng and John Gilbert.
 
@@ -41,6 +43,9 @@ Packages in SuiteSparse, and files in this directory:
                 GraphBLAS/README.txt.  The rest of SuiteSparse still uses
                 'make'.  A cmake setup for all of SuiteSparse is in progress.
                 author: Tim Davis
+
+    SLIP_LU     solves sparse linear systems in exact arithmetic.
+                Requires the GNU GMP and MPRF libraries.
 
     AMD         approximate minimum degree ordering.  This is the built-in AMD
                 function in MATLAB.
@@ -116,9 +121,12 @@ Packages in SuiteSparse, and files in this directory:
 
     lib         'make' places shared libraries for each package here
 
-    Makefile    to compile all of SuiteSparse (except GraphBLAS)
+    Makefile    to compile all of SuiteSparse
                 make            compiles SuiteSparse libraries and runs demos
-                make install    compiles SuiteSparse and installs in /usr/local
+                make install    compiles SuiteSparse and installs in the
+                                current directory (./lib, ./include).
+                                Use "sudo make INSTALL=/usr/local" to install
+                                in /usr/local/lib and /usr/local/include.
                 make uninstall  undoes 'make install'
                 make library    compiles SuiteSparse libraries (not demos)
                 make distclean  removes all files not in distribution, including
@@ -274,7 +282,8 @@ QUICK START FOR MATLAB USERS (Linux, Mac, or Windows):
 -----------------------------------------------------------------------------
 
 Uncompress the SuiteSparse.zip or SuiteSparse.tar.gz archive file (they contain
-the same thing), then in the MATLAB Command Window, cd to the SuiteSparse
+the same thing).  Next, compile the GraphBLAS library (see instructions in
+GraphBLAS/Doc).  Then in the MATLAB Command Window, cd to the SuiteSparse
 directory and type SuiteSparse_install.  All packages will be compiled, and
 several demos will be run.  To run a (long!) exhaustive test, do
 SuiteSparse_test.
@@ -292,6 +301,10 @@ For all other packages, type 'make' in this directory.  All libraries will be
 created and copied into SuiteSparse/lib.  All include files need by the
 applications that use SuiteSparse are copied into SuiteSparse/include.   All
 user documenation is copied into SuiteSparse/share/doc.
+
+Be sure to first install all required libraries:  BLAS and LAPACK for UMFPACK,
+CHOLMOD, and SPQR, and GMP and MPFR for SLIP_LU.  Be sure to use the latest
+libraries; SLIP_LU requires MPFR 4.0 for example.
 
 When compiling the libraries, do NOT use the INSTALL=... options for
 installing. Just do:
@@ -342,10 +355,30 @@ Any parameter you see in the output of 'make config' with an equal sign
 can be modified at the 'make' command line.
 
 If you do "make install" by itself, then the packages are all installed in
-SuiteSparse/lib (libraries), SuiteSparse/include (include *.h files), and
-SuiteSparse/doc/suitesparse-VERSION (documentation).  If you want to install
-elsewhere, do:
+SuiteSparse/lib (libraries), SuiteSparse/include (include .h files), and
+SuiteSparse/doc/suitesparse-VERSION (documentation).  To install in
+/usr/local, the default location for Linux, do:
 
+    make library
+    sudo make install INSTALL=/usr/local
+
+If you want to install elsewhere, say in /my/path, first ensure that /my/path
+is in your LD_LIBRARY_PATH.  How to do that depends on your system, but in the
+bash shell, add this to your ~/.bashrc file:
+
+    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/my/path
+    export LD_LIBRARY_PATH
+
+You may also need to add SuiteSparse/lib to your path.  If your copy of
+SuiteSparse is in /home/me/SuiteSparse, for example, then add this to your
+~/.bashrc file:
+
+    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/me/SuiteSparse/lib:/my/path
+    export LD_LIBRARY_PATH
+
+Then do the following (use "sudo make ..." if needed):
+
+    make library
     make install INSTALL=/my/path
 
 which puts the files in /my/path/lib, /my/path/include, and /my/path/doc.
@@ -362,7 +395,7 @@ includes in /usr/local/lib and /usr/local/include, do:
 
 which copies the documentation to /tmp/doc where you can then remove it later.
 
-Both the static (*.a) and shared (*.so) libraries are compiled.  The *.a
+Both the static (.a) and shared (.so) libraries are compiled.  The lib.a
 libraries are left in the package Lib folder (AMD/Lib/libamd.a for example).
 The main exception to this rule is the SuiteSparse_config library, which is in
 SuiteSparse/libsuiteSparseconfig.a.  SuiteSparse_config is required by all

@@ -1,6 +1,9 @@
 function test122
 %TEST122 performance tests for GrB_assign
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 fprintf ('test120:-------------------  C(I,J)<!M> += A:\n') ;
 
 [save save_chunk] = nthreads_get ;
@@ -17,7 +20,7 @@ k = 3000 ;
     I1 = randperm (k) ;
     I0 = uint64 (I1) - 1 ;
 
-d.mask = 'scmp' ;
+d.mask = 'complement' ;
 
 ncores = feature ('numcores') ;
 

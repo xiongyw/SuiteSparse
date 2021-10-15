@@ -2,28 +2,34 @@
 // GraphBLAS/Demo/Source/get_matrix.c: get matrix from file, or create random
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
 // Creates a symmetric matrix, either from a file or by creating a random
 // matrix.  If reading from a file, the file is assumed to be 0-based.
 
-#define FREE_ALL        \
-    GrB_free (&A) ;     \
-    GrB_free (&desc) ;  \
-    GrB_free (&Mask) ;
+#include "GraphBLAS.h"
 
-#include "demos.h"
+#define FREE_ALL                    \
+    GrB_Matrix_free (&A) ;          \
+    GrB_Descriptor_free (&desc) ;   \
+    GrB_Matrix_free (&Mask) ;
 
+#undef GB_PUBLIC
+#define GB_LIBRARY
+#include "graphblas_demos.h"
+
+GB_PUBLIC
 GrB_Info get_matrix         // get a matrix from stdin, or create random one
 (
     GrB_Matrix *A_output,   // matrix to create
     int argc,               // command-line arguments
     char **argv,
     bool no_self_edges,     // if true, ensure the matrix has no self-edges
-    bool boolean            // if true, file is read as GrB_BOOL, else GrB_FP64
+    bool boolean,           // if true, file is read as GrB_BOOL, else GrB_FP64
+    bool spones             // if true, return all entries equal to 1
 )
 {
 
@@ -108,7 +114,7 @@ GrB_Info get_matrix         // get a matrix from stdin, or create random one
                 for (int64_t i = 0 ; i < nrows ; i++)
                 {
                     // Mask (i,i) = true
-                    OK (GrB_Matrix_setElement (Mask, (bool) true, i, i)) ;
+                    OK (GrB_Matrix_setElement_BOOL (Mask, (bool) true, i, i)) ;
                 }
                 // A<~Mask> = A, thus removing the diagonal.  GrB_transpose
                 // does C<Mask>=A', so setting inp0 to tran does C=A'', and
@@ -117,11 +123,11 @@ GrB_Info get_matrix         // get a matrix from stdin, or create random one
                 // diagonal is not touched by C<~Mask>=A.
                 OK (GrB_Descriptor_new (&desc)) ;
                 OK (GrB_Descriptor_set (desc, GrB_INP0, GrB_TRAN)) ;
-                OK (GrB_Descriptor_set (desc, GrB_MASK, GrB_SCMP)) ;
+                OK (GrB_Descriptor_set (desc, GrB_MASK, GrB_COMP)) ;
                 OK (GrB_Descriptor_set (desc, GrB_OUTP, GrB_REPLACE)) ;
                 OK (GrB_transpose (A, Mask, NULL, A, desc)) ;
-                GrB_free (&Mask) ;
-                GrB_free (&desc) ;
+                GrB_Matrix_free (&Mask) ;
+                GrB_Descriptor_free (&desc) ;
             }
 
             // force completion, just to check timing
@@ -170,6 +176,17 @@ GrB_Info get_matrix         // get a matrix from stdin, or create random one
         fprintf (stderr, "matrix %.16g by %.16g, %.16g entries, from stdin\n",
             (double) nrows, (double) ncols, (double) nvals) ;
 
+    }
+
+    //--------------------------------------------------------------------------
+    // replace all values with 1 if spones is true
+    //--------------------------------------------------------------------------
+
+    if (spones)
+    {
+        // A<A,struct> = 1
+        OK (GrB_Matrix_assign_BOOL (A, A, NULL, true,
+            GrB_ALL, nrows, GrB_ALL, ncols, GrB_DESC_S)) ;
     }
 
     //--------------------------------------------------------------------------

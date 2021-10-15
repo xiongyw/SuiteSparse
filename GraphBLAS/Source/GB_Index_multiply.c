@@ -2,8 +2,8 @@
 // GB_Index_multiply:  multiply two integers and guard against overflow
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -28,16 +28,14 @@ bool GB_Index_multiply      // true if ok, false if overflow
         return (true) ;
     }
 
-    if (a < 0 || a > GB_INDEX_MAX || b < 0 || b > GB_INDEX_MAX)
+    if (a < 0 || a > GxB_INDEX_MAX || b < 0 || b > GxB_INDEX_MAX)
     { 
         // a or b are out of range
         return (false) ;
     }
 
-    double da = ceil (log2 ((double) a)) ;
-    double db = ceil (log2 ((double) b)) ;
-    if (da + db > 60)
-    {
+    if (GB_CEIL_LOG2 (a) + GB_CEIL_LOG2 (b) > 60)
+    { 
         // a * b may overflow
         return (false) ;
     }

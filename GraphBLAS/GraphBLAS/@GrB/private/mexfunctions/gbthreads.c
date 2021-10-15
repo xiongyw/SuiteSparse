@@ -2,12 +2,19 @@
 // gbthreads: get/set the maximum # of threads to use in GraphBLAS
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 //------------------------------------------------------------------------------
 
+// Usage:
+
+// nthreads = gbthreads
+// nthreads = gbthreads (nthreads)
+
 #include "gb_matlab.h"
+
+#define USAGE "usage: nthreads = GrB.threads ; or GrB.threads (nthreads)"
 
 void mexFunction
 (
@@ -22,8 +29,7 @@ void mexFunction
     // check inputs
     //--------------------------------------------------------------------------
 
-    gb_usage (nargin <= 1 && nargout <= 1,
-        "usage: nthreads = GrB.threads ; or GrB.threads (nthreads)") ;
+    gb_usage (nargin <= 1 && nargout <= 1, USAGE) ;
 
     //--------------------------------------------------------------------------
     // set the # of threads, if requested
@@ -37,14 +43,14 @@ void mexFunction
         CHECK_ERROR (!gb_mxarray_is_scalar (pargin [0]),
             "input must be a scalar") ;
         nthreads_max = (int) mxGetScalar (pargin [0]) ;
-        OK (GxB_set (GxB_NTHREADS, nthreads_max)) ;
+        OK (GxB_Global_Option_set (GxB_NTHREADS, nthreads_max)) ;
     }
 
     //--------------------------------------------------------------------------
     // return # of threads
     //--------------------------------------------------------------------------
 
-    OK (GxB_get (GxB_NTHREADS, &nthreads_max)) ;
+    OK (GxB_Global_Option_get (GxB_NTHREADS, &nthreads_max)) ;
     pargout [0] = mxCreateDoubleScalar (nthreads_max) ;
     GB_WRAPUP ;
 }

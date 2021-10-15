@@ -14,15 +14,21 @@ function make (what)
 % GraphBLAS requires an ANSI C11 compliant compiler.  On the Mac, clang 8.0
 % suffices.  gcc should be version 4.9.3 or later
 
-% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-% http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
 
-if (isempty (strfind (pwd, 'GraphBLAS/Test')))
-    % make with no arguments should only be done in GraphBLAS/Test
+here = pwd ;
+if (ispc)
+    here = strrep (here, filesep, '/') ;
+end
+if (isempty (strfind (here, 'GraphBLAS/Test')))
+    % this function should only be done in GraphBLAS/Test
     error ('make should be used in Test directory only') ;
 end
 
 fprintf ('\nCompiling GraphBLAS tests:\n') ;
+
+need_rename = ~verLessThan ('matlab', '9.10') ;
 
 try
     spok (sparse (1)) ;
@@ -39,10 +45,7 @@ end
 
 make_all = (isequal (what, 'all')) ;
 
-%  flags = '-g' ;
-   flags = '-O' ;
-
-flags = [flags ' -largeArrayDims'] ;
+flags = '-g -R2018a' ;
 
 try
     if (strncmp (computer, 'GLNX', 4))
@@ -63,6 +66,7 @@ try
             end
         end
     end
+catch
 end
 
 mexfunctions = dir ('GB_mex_*.c') ;
@@ -89,16 +93,41 @@ inc = '-ITemplate -I../Include -I../Source -I../Source/Template -I../Demo/Includ
 
 if (ismac)
     % Mac (do 'make install' for GraphBLAS first)
-    libraries = '-L/usr/local/lib -lgraphblas' ; % -lomp' ;
+    if (need_rename)
+        libraries = '-L/usr/local/lib -lgraphblas_renamed' ; % -lomp' ;
+    else
+        libraries = '-L/usr/local/lib -lgraphblas' ; % -lomp' ;
+    end
 %   flags = [ flags   ' CFLAGS="$CXXFLAGS -Xpreprocessor -fopenmp" ' ] ;
 %   flags = [ flags ' CXXFLAGS="$CXXFLAGS -Xpreprocessor -fopenmp" ' ] ;
 %   flags = [ flags  ' LDFLAGS="$LDFLAGS  -fopenmp"' ] ;
+elseif (ispc)
+    % Windows
+    if (need_rename)
+        libraries = '-L../GraphBLAS/build/Release -L. -lgraphblas_renamed' ;
+    else
+        libraries = '-L../build/Release -L. -lgraphblas' ;
+    end
+    flags = [ flags ' CFLAGS="$CXXFLAGS -wd\"4244\" -wd\"4146\" -wd\"4217\" -wd\"4286\" -wd\"4018\" -wd\"4996\" -wd\"4047\" -wd\"4554\"" '] ;
 else
     % Linux
-    libraries = '-L../build -L. -lgraphblas' ;
+    if (need_rename)
+        libraries = '-L../GraphBLAS/build -L. -lgraphblas_renamed' ;
+    else
+        libraries = '-L../build -L. -lgraphblas' ;
+    end
     flags = [ flags   ' CFLAGS="$CXXFLAGS -fopenmp -fPIC -Wno-pragmas" '] ;
     flags = [ flags ' CXXFLAGS="$CXXFLAGS -fopenmp -fPIC -Wno-pragmas" '] ;
     flags = [ flags  ' LDFLAGS="$LDFLAGS  -fopenmp -fPIC" '] ;
+end
+
+if (need_rename)
+    fprintf ('Linking with -lgraphblas_renamed\n') ;
+    flags = [flags ' -DGBRENAME=1 ' ] ;
+    inc = [inc ' -I../GraphBLAS/rename ' ] ;
+    libgraphblas = '-lgraphblas_renamed' ;
+else
+    libgraphblas = '-lgraphblas' ;
 end
 
 %-------------------------------------------------------------------------------
@@ -113,6 +142,12 @@ for k = 1:length (hfiles)
     htime = max (htime, t) ;
 end
 
+if (ispc)
+    obj_extension = '.obj' ;
+else
+    obj_extension = '.o' ;
+end
+
 % compile any source files that need compiling
 any_c_compiled = false ;
 objlist = '' ;
@@ -124,7 +159,7 @@ for k = 1:length (cfiles)
 
     % get the object file name
     ofile = cfiles(k).name ;
-    objfile = [ ofile(1:end-2) '.o' ] ;
+    objfile = [ ofile(1:end-2) obj_extension ] ;
 
     % get the object file modification time
     ofiles {k} = objfile ;
@@ -140,12 +175,13 @@ for k = 1:length (cfiles)
     % compile the cfile if it is newer than its object file, or any hfile
     if (make_all || tc > tobj || htime > tobj)
         % compile the cfile
-        % fprintf ('.', cfile) ;
-        fprintf ('%s\n', cfile) ;
+        fprintf ('.') ;
+        % fprintf ('%s\n', cfile) ;
         mexcmd = sprintf ('mex -c %s -silent %s %s', flags, inc, cfile) ;
         if (dryrun)
             fprintf ('%s\n', mexcmd) ;
         else
+            % fprintf ('%s\n', mexcmd) ;
             eval (mexcmd) ;
         end
         any_c_compiled = true ;
@@ -175,16 +211,25 @@ for k = 1:length (mexfunctions)
         % compile the mexFunction
         mexcmd = sprintf ('mex -silent %s %s %s %s %s', ...
             flags, inc, mexfunction, objlist, libraries) ;
-        % fprintf (':') ;
-        fprintf ('%s\n', mexfunction) ;
+        fprintf (':') ;
+        % fprintf ('%s\n', mexfunction) ;
         if (dryrun)
             fprintf ('%s\n', mexcmd) ;
         else
+            % fprintf ('%s\n', mexcmd) ;
             eval (mexcmd) ;
         end
     end
 end
 
 % compile GB_spones_mex
-mex -O -R2018a GB_spones_mex.c
+mex -g -R2018a GB_spones_mex.c
+
+% load the library
+if (ispc)
+    cd ../build/Release
+    GrB (1)
+    cd ../../Test
+    pwd
+end
 

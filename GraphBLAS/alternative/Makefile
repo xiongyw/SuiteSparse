@@ -2,40 +2,72 @@
 # GraphBLAS/alternative/Makefile
 #-------------------------------------------------------------------------------
 
-#  SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-#  http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+# SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 #-------------------------------------------------------------------------------
 
+# To compile with 8 threads:
+#
+#   make -j8
+#
+# To install:
+#
+#   make -j8
+#   sudo make install
+
+default: library
+
+VER1 = 5
+VER2 = 0
+VER3 = 3
+
 # pick your compiler:
-# CC = gcc
+  CC = gcc
 # CC = cc
 # CC = clang
 # CC = xlc
 # CC = gcc-8
-  CC = icc -mp1
-
-# note that -mp1 is essential for icc, for proper Inf and NaN behavior.
+# note that -mp1 is essential for icc, for proper Inf and NaN behavior:
+# CC = icc -mp1
+# CC = c++
 
 SRC = ../Source/*.c ../Source/Generated/*.c
 INC = ../Include/*.h ../Source/*.h ../Source/Template/* ../Source/Generated/*.h ../Source/Generator/*.h 
 SRC2 = $(notdir $(wildcard $(SRC)))
 OBJ = $(SRC2:.c=.o)
-LDFLAGS = -fopenmp
-CFLAGS = -O3 -std=c11 -fopenmp -fexceptions -fPIC
+LDFLAGS = -fopenmp -lm
+CFLAGS = -fopenmp -fexceptions -fPIC
+# pick the optimization level:
+  CFLAGS += -O3
+# CFLAGS += -g
+ifneq ($(CC),c++)
+    # comment this out if using c++:
+    CFLAGS += -std=c11 
+endif
 CPPFLAGS = -I../Include -I../Source -I../Source/Template -I../Source/Generated -I../Source/Generator
 SO_OPTS = $(LDFLAGS)
+CFLAGS += -Wno-pragmas
+
+# To compile the libgraphblas_renamed library, change all occurences of
+# libgraphblas to libgraphblas_renamed, below, and uncomment these 2 lines:
+# CFLAGS += -DGBRENAME=1
+# CPPFLAGS += -I../GraphBLAS/rename
 
 UNAME := $(shell uname)
 ifeq ($(UNAME),Darwin)
     # Mac
     CFLAGS += -fno-common
-    SO_NAME = libgraphblas.dylib
-    SO_OPTS += -dynamiclib -shared -undefined dynamic_lookup
+    SO_NAME = libgraphblas.dylib.$(VER1).$(VER2).$(VER3)
+    SO_NAME0 = libgraphblas.dylib
+    SO_NAME1 = libgraphblas.dylib.$(VER1)
+    SO_OPTS += -dynamiclib -shared  -Wl,-install_name -Wl,$(SO_NAME1) -undefined dynamic_lookup
 else
     # Linux
-    SO_NAME = libgraphblas.so
-    SO_OPTS += -shared -Wl,-soname -Wl,$(SO_NAME) -Wl,--no-undefined
+    SO_NAME = libgraphblas.so.$(VER1).$(VER2).$(VER3)
+    SO_NAME0 = libgraphblas.so
+    SO_NAME1 = libgraphblas.so.$(VER1)
+    SO_OPTS += -shared -Wl,-soname -Wl,$(SO_NAME1)
 endif
 
 %.o: ../Source/%.c $(INC)
@@ -44,7 +76,9 @@ endif
 %.o: ../Source/Generated/%.c $(INC)
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $(notdir $@)
 
-default: $(SO_NAME)
+library: $(SO_NAME)
+	ln -sf $(SO_NAME) $(SO_NAME0)
+	ln -sf $(SO_NAME) $(SO_NAME1)
 
 $(SO_NAME): $(OBJ)
 	$(CC) $(SO_OPTS) $^ -o $@
@@ -57,9 +91,12 @@ libgraphblas.a: $(OBJ)
 	ar -rv $@ $^
 	- ranlib $@
 
-install: $(SO_NAME)
-	$(CP) $(SO_NAME) /usr/local/lib
-	$(CP) ../Include/GraphBLAS.h  /usr/local/include
+# Do "make" first, and then "sudo make install"
+install: library
+	cp $(SO_NAME) /usr/local/lib
+	ln -sf /usr/local/lib/$(SO_NAME) /usr/local/lib/$(SO_NAME0)
+	ln -sf /usr/local/lib/$(SO_NAME) /usr/local/lib/$(SO_NAME1)
+	cp ../Include/GraphBLAS.h  /usr/local/include
 
 DINC = ../Demo/Include/*.h $(INC)
 DSRC = ../Demo/Source/*.c
@@ -79,11 +116,13 @@ DOBJ = $(DSRC2:.c=.o)
 DEMO_PRG = $(notdir $(wildcard ../Demo/Program/*_demo.c))
 DEMO = $(DEMO_PRG:.c=)
 
+demo: $(DEMO)
+
 run: $(DEMO)
 	./altdemo
 
 clean:
-	$(RM) -f *.o *.out *_out.m
+	$(RM) -f *.o *.out *_out.m *_out2.m
 
 distclean: clean
 	$(RM) -rf *.dSYM $(DEMO) libgraphblas.*

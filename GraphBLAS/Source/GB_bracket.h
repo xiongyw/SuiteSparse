@@ -2,8 +2,8 @@
 // GB_bracket.h: definitions for GB_bracket
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -20,7 +20,8 @@
 
 #if 0
 
-// no longer used
+// This method is no longer used but is kept here in case it is needed in
+// the future.
 
 static inline void GB_bracket_left
 (
@@ -29,8 +30,7 @@ static inline void GB_bracket_left
     int64_t *kleft,
     const int64_t kright
 )
-{
-    ASSERT (DEAD_CODE) ;
+{ 
     // tighten kleft
     int64_t len = kright - (*kleft) + 1 ;
     if (len > 0 && X [(*kleft)] < imin)
@@ -38,7 +38,7 @@ static inline void GB_bracket_left
         // search for imin in X [kleft:kright]
         int64_t pleft = (*kleft) ;
         int64_t pright = kright ;
-        GB_BINARY_TRIM_SEARCH (imin, X, pleft, pright) ;
+        GB_TRIM_BINARY_SEARCH (imin, X, pleft, pright) ;
         (*kleft) = pleft ;
     }
 }
@@ -67,7 +67,7 @@ static inline void GB_bracket_right
         // search for imax in X [kleft:kright]
         int64_t pleft = kleft ;
         int64_t pright = (*kright) ;
-        GB_BINARY_TRIM_SEARCH (imax, X, pleft, pright) ;
+        GB_TRIM_BINARY_SEARCH (imax, X, pleft, pright) ;
         (*kright) = pleft ;
     }
 }
@@ -82,6 +82,9 @@ static inline void GB_bracket_right
 
 // Zombies are not tolerated.
 
+// This method is no longer used but is kept here in case it is needed in
+// the future.
+
 #if 0
 
 static inline void GB_bracket
@@ -95,8 +98,6 @@ static inline void GB_bracket
     int64_t *kright_new
 )
 { 
-    ASSERT (DEAD_CODE) ;
-
     int64_t kleft  = kleft_in ;
     int64_t kright = kright_in ;
 

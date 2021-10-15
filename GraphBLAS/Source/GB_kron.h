@@ -2,8 +2,8 @@
 // GB_kron.h: definitions for GB_kron
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -17,6 +17,7 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
     const bool C_replace,           // if true, clear C before writing to it
     const GrB_Matrix M,             // optional mask for C, unused if NULL
     const bool Mask_comp,           // if true, use !M
+    const bool Mask_struct,         // if true, use the only structure of M
     const GrB_BinaryOp accum,       // optional accum for Z=accum(C,T)
     const GrB_BinaryOp op,          // defines '*' for kron(A,B)
     const GrB_Matrix A,             // input matrix
@@ -28,11 +29,13 @@ GrB_Info GB_kron                    // C<M> = accum (C, kron(A,B))
 
 GrB_Info GB_kroner                  // C = kron (A,B)
 (
-    GrB_Matrix *Chandle,            // output matrix
+    GrB_Matrix C,                   // output matrix (static header)
     const bool C_is_csc,            // desired format of C
     const GrB_BinaryOp op,          // multiply operator
     const GrB_Matrix A,             // input matrix
+    bool A_is_pattern,              // true if values of A are not used
     const GrB_Matrix B,             // input matrix
+    bool B_is_pattern,              // true if values of B are not used
     GB_Context Context
 ) ;
 

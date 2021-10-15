@@ -1,6 +1,9 @@
 function test112
 %TEST112 test row/col scale
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 fprintf ('test112: row/col scale\n') ;
 
 rng ('default') ;

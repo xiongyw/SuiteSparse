@@ -2,8 +2,8 @@
 // GxB_Vector_subassign_[SCALAR]: assign scalar to vector, via scalar expansion
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -15,8 +15,8 @@
 
 #include "GB_subassign.h"
 
-#define GB_ASSIGN(type,T,ampersand)                                            \
-GrB_Info GxB_Vector_subassign_ ## T /* w(Rows)<M> = accum (w(Rows),x)       */ \
+#define GB_ASSIGN_SCALAR(type,T,ampersand)                                     \
+GrB_Info GB_EVAL2 (GXB (Vector_subassign_), T) /* w(I)<M> = accum (w(I),x)  */ \
 (                                                                              \
     GrB_Vector w,                   /* input/output vector for results      */ \
     const GrB_Vector M,             /* optional mask for w(Rows)            */ \
@@ -27,27 +27,32 @@ GrB_Info GxB_Vector_subassign_ ## T /* w(Rows)<M> = accum (w(Rows),x)       */ \
     const GrB_Descriptor desc       /* descriptor for w(Rows) and M         */ \
 )                                                                              \
 {                                                                              \
-    GB_WHERE ("GxB_Vector_subassign_" GB_STR(T)                                \
+    GB_WHERE (w, "GxB_Vector_subassign_" GB_STR(T)                             \
         " (w, M, accum, x, Rows, nRows, desc)") ;                              \
+    GB_BURBLE_START ("GxB_subassign") ;                                        \
     GB_RETURN_IF_NULL_OR_FAULTY (w) ;                                          \
     GB_RETURN_IF_FAULTY (M) ;                                                  \
     ASSERT (GB_VECTOR_OK (w)) ;                                                \
     ASSERT (GB_IMPLIES (M != NULL, GB_VECTOR_OK (M))) ;                        \
-    return (GB_subassign_scalar ((GrB_Matrix) w, (GrB_Matrix) M, accum,        \
-        ampersand x, GB_## T ## _code, Rows, nRows, GrB_ALL, 1, desc,          \
+    GrB_Info info = (GB_subassign_scalar ((GrB_Matrix) w, (GrB_Matrix) M,      \
+        accum, ampersand x, GB_## T ## _code, Rows, nRows, GrB_ALL, 1, desc,   \
         Context)) ;                                                            \
+    GB_BURBLE_END ;                                                            \
+    return (info) ;                                                            \
 }
 
-GB_ASSIGN (bool     , BOOL   , &)
-GB_ASSIGN (int8_t   , INT8   , &)
-GB_ASSIGN (uint8_t  , UINT8  , &)
-GB_ASSIGN (int16_t  , INT16  , &)
-GB_ASSIGN (uint16_t , UINT16 , &)
-GB_ASSIGN (int32_t  , INT32  , &)
-GB_ASSIGN (uint32_t , UINT32 , &)
-GB_ASSIGN (int64_t  , INT64  , &)
-GB_ASSIGN (uint64_t , UINT64 , &)
-GB_ASSIGN (float    , FP32   , &)
-GB_ASSIGN (double   , FP64   , &)
-GB_ASSIGN (void *   , UDT    ,  )
+GB_ASSIGN_SCALAR (bool      , BOOL   , &)
+GB_ASSIGN_SCALAR (int8_t    , INT8   , &)
+GB_ASSIGN_SCALAR (uint8_t   , UINT8  , &)
+GB_ASSIGN_SCALAR (int16_t   , INT16  , &)
+GB_ASSIGN_SCALAR (uint16_t  , UINT16 , &)
+GB_ASSIGN_SCALAR (int32_t   , INT32  , &)
+GB_ASSIGN_SCALAR (uint32_t  , UINT32 , &)
+GB_ASSIGN_SCALAR (int64_t   , INT64  , &)
+GB_ASSIGN_SCALAR (uint64_t  , UINT64 , &)
+GB_ASSIGN_SCALAR (float     , FP32   , &)
+GB_ASSIGN_SCALAR (double    , FP64   , &)
+GB_ASSIGN_SCALAR (GxB_FC32_t, FC32   , &)
+GB_ASSIGN_SCALAR (GxB_FC64_t, FC64   , &)
+GB_ASSIGN_SCALAR (void *    , UDT    ,  )
 

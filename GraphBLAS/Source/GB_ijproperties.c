@@ -2,8 +2,8 @@
 // GB_ijproperties: check I and determine its properties
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -12,13 +12,13 @@
 #include "GB_ij.h"
 
 // FUTURE:: if limit=0, print a different message.  see also setEl, extractEl.
-#define GB_ICHECK(i,limit)                                              \
-{                                                                       \
-    if ((i) < 0 || (i) >= (limit))                                      \
-    {                                                                   \
-        return (GB_ERROR (GrB_INDEX_OUT_OF_BOUNDS, (GB_LOG,             \
-        "index "GBd" out of bounds, must be < "GBd, (i), (limit)))) ;   \
-    }                                                                   \
+#define GB_ICHECK(i,limit)                                                  \
+{                                                                           \
+    if ((i) < 0 || (i) >= (limit))                                          \
+    {                                                                       \
+        GB_ERROR (GrB_INDEX_OUT_OF_BOUNDS,                                  \
+        "index " GBd " out of bounds, must be < " GBd , (i), (limit)) ;     \
+    }                                                                       \
 }
 
 GrB_Info GB_ijproperties        // check I and determine its properties
@@ -65,7 +65,7 @@ GrB_Info GB_ijproperties        // check I and determine its properties
 
     ASSERT (I != NULL) ;
     ASSERT (limit >= 0) ;
-    ASSERT (limit <= GB_INDEX_MAX) ;
+    ASSERT (limit <= GxB_INDEX_MAX) ;
     int64_t imin, imax ;
 
     //--------------------------------------------------------------------------
@@ -73,7 +73,7 @@ GrB_Info GB_ijproperties        // check I and determine its properties
     //--------------------------------------------------------------------------
 
     // scan the list of indices: check if OK, determine if they are
-    // jumbled, or contiguous, their min and max index, and actual length
+    // unsorted, or contiguous, their min and max index, and actual length
     bool I_unsorted = false ;
     bool I_has_duplicates = false ;
     bool I_contig = true ;
@@ -193,17 +193,32 @@ GrB_Info GB_ijproperties        // check I and determine its properties
         //----------------------------------------------------------------------
 
         // scan I to find imin and imax, and validate the list. Also determine
-        // if it is sorted or not, and contigous or not.
+        // if it is sorted or not, and contiguous or not.
 
         imin = limit ;
         imax = -1 ;
 
+        // allocate workspace for imin and imax
+        GB_WERK_DECLARE (Work_imin, int64_t) ;
+        GB_WERK_DECLARE (Work_imax, int64_t) ;
+        GB_WERK_PUSH (Work_imin, ntasks, int64_t) ;
+        GB_WERK_PUSH (Work_imax, ntasks, int64_t) ;
+        if (Work_imin == NULL || Work_imax == NULL)
+        { 
+            // out of memory
+            GB_WERK_POP (Work_imax, int64_t) ;
+            GB_WERK_POP (Work_imin, int64_t) ;
+            return (GrB_OUT_OF_MEMORY) ;
+        }
+
+        int tid ;
         #pragma omp parallel for num_threads(nthreads) schedule(dynamic,1) \
             reduction(||:I_unsorted) reduction(&&:I_contig) \
-            reduction(min:imin) reduction(max:imax) \
             reduction(||:I_has_duplicates)
-        for (int tid = 0 ; tid < ntasks ; tid++)
+        for (tid = 0 ; tid < ntasks ; tid++)
         {
+            int64_t my_imin = limit ;
+            int64_t my_imax = -1 ;
             int64_t istart, iend ;
             GB_PARTITION (istart, iend, ni, tid, ntasks) ;
             int64_t ilast = (istart == 0) ? -1 : I [istart-1] ;
@@ -234,11 +249,24 @@ GrB_Info GB_ijproperties        // check I and determine its properties
                         I_contig = false ;
                     }
                 }
-                imin = GB_IMIN (imin, i) ;
-                imax = GB_IMAX (imax, i) ;
+                my_imin = GB_IMIN (my_imin, i) ;
+                my_imax = GB_IMAX (my_imax, i) ;
                 ilast = i ;
             }
+            Work_imin [tid] = my_imin ;
+            Work_imax [tid] = my_imax ;
         }
+
+        // wrapup
+        for (tid = 0 ; tid < ntasks ; tid++)
+        { 
+            imin = GB_IMIN (imin, Work_imin [tid]) ;
+            imax = GB_IMAX (imax, Work_imax [tid]) ;
+        }
+
+        // free workspace
+        GB_WERK_POP (Work_imax, int64_t) ;
+        GB_WERK_POP (Work_imin, int64_t) ;
 
         #ifdef GB_DEBUG
         {
@@ -296,7 +324,7 @@ GrB_Info GB_ijproperties        // check I and determine its properties
         //----------------------------------------------------------------------
 
         if (I_contig)
-        { 
+        {
             // I is a contigous list of stride 1, imin:imax.
             // change Ikind to GB_ALL if 0:limit-1, or GB_RANGE otherwise
             if (imin == 0 && imax == limit-1)

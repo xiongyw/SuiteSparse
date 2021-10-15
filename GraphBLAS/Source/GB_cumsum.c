@@ -2,8 +2,8 @@
 // GB_cumsum: cumlative sum of an array
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -14,18 +14,20 @@
 
 //      count = cumsum ([0 count[0:n-1]]) ;
 
-// That is, count [j] on input is overwritten with the value of
-// sum (count [0..j-1]).  count [n] is implicitly zero on input.
+// That is, count [j] on input is overwritten with sum (count [0..j-1]).
+// On input, count [n] is not accessed and is implicitly zero on input.
 // On output, count [n] is the total sum.
 
 #include "GB.h"
 
-void GB_cumsum                  // compute the cumulative sum of an array
+GB_PUBLIC   // accessed by the MATLAB tests in GraphBLAS/Test only
+void GB_cumsum                      // cumulative sum of an array
 (
-    int64_t *restrict count,    // size n+1, input/output
+    int64_t *restrict count,     // size n+1, input/output
     const int64_t n,
-    int64_t *restrict kresult,  // return k, if needed by the caller
-    int nthreads
+    int64_t *restrict kresult,   // return k, if needed by the caller
+    int nthreads,
+    GB_Context Context
 )
 {
 
@@ -46,7 +48,7 @@ void GB_cumsum                  // compute the cumulative sum of an array
 
     if (nthreads > 1)
     { 
-        nthreads = GB_IMIN (nthreads, n / 1024) ;
+        nthreads = GB_IMIN (nthreads, n / (64 * 1024)) ;
         nthreads = GB_IMAX (nthreads, 1) ;
     }
 
@@ -55,7 +57,7 @@ void GB_cumsum                  // compute the cumulative sum of an array
     //--------------------------------------------------------------------------
 
     if (kresult == NULL)
-    { 
+    {
 
         if (nthreads <= 2)
         {
@@ -81,11 +83,21 @@ void GB_cumsum                  // compute the cumulative sum of an array
             // cumsum with multiple threads
             //------------------------------------------------------------------
 
-            int64_t ws [GB_PGI_NTHREADS(nthreads)+1] ;
-            #pragma omp parallel num_threads(nthreads)
+            // allocate workspace
+            GB_WERK_DECLARE (ws, int64_t) ;
+            GB_WERK_PUSH (ws, nthreads, int64_t) ;
+            if (ws == NULL)
+            { 
+                // out of memory; use a single thread instead
+                GB_cumsum (count, n, NULL, 1, NULL) ;
+                return ;
+            }
+
+            int tid ;
+            #pragma omp parallel for num_threads(nthreads) schedule(static)
+            for (tid = 0 ; tid < nthreads ; tid++)
             {
-                // each thread sums up its own part
-                int tid = GB_OPENMP_THREAD_ID ;
+                // each task sums up its own part
                 int64_t istart, iend ;
                 GB_PARTITION (istart, iend, n, tid, nthreads) ;
                 int64_t s = 0 ;
@@ -94,11 +106,15 @@ void GB_cumsum                  // compute the cumulative sum of an array
                     s += count [i] ;
                 }
                 ws [tid] = s ;
+            }
 
-                #pragma omp barrier
-
-                // each thread computes the cumsum of its own part
-                s = 0 ;
+            #pragma omp parallel for num_threads(nthreads) schedule(static)
+            for (tid = 0 ; tid < nthreads ; tid++)
+            {
+                // each tasks computes the cumsum of its own part
+                int64_t istart, iend ;
+                GB_PARTITION (istart, iend, n, tid, nthreads) ;
+                int64_t s = 0 ;
                 for (int i = 0 ; i < tid ; i++)
                 { 
                     s += ws [i] ;
@@ -115,11 +131,13 @@ void GB_cumsum                  // compute the cumulative sum of an array
                 }
             }
 
+            // free workspace
+            GB_WERK_POP (ws, int64_t) ;
         }
 
     }
     else
-    { 
+    {
 
         if (nthreads <= 2)
         {
@@ -148,13 +166,25 @@ void GB_cumsum                  // compute the cumulative sum of an array
             // cumsum with multiple threads, also compute k
             //------------------------------------------------------------------
 
-            int64_t ws [GB_PGI_NTHREADS(nthreads)+1] ;
-            int64_t wk [GB_PGI_NTHREADS(nthreads)+1] ;
+            // allocate workspace
+            GB_WERK_DECLARE (ws, int64_t) ;
+            GB_WERK_DECLARE (wk, int64_t) ;
+            GB_WERK_PUSH (ws, nthreads, int64_t) ;
+            GB_WERK_PUSH (wk, nthreads, int64_t) ;
+            if (ws == NULL || wk == NULL)
+            { 
+                // out of memory; use a single thread instead
+                GB_WERK_POP (wk, int64_t) ;
+                GB_WERK_POP (ws, int64_t) ;
+                GB_cumsum (count, n, kresult, 1, NULL) ;
+                return ;
+            }
 
-            #pragma omp parallel num_threads(nthreads)
+            int tid ;
+            #pragma omp parallel for num_threads(nthreads) schedule(static)
+            for (tid = 0 ; tid < nthreads ; tid++)
             {
-                // each thread sums up its own part
-                int tid = GB_OPENMP_THREAD_ID ;
+                // each task sums up its own part
                 int64_t istart, iend ;
                 GB_PARTITION (istart, iend, n, tid, nthreads) ;
                 int64_t k = 0 ;
@@ -167,11 +197,15 @@ void GB_cumsum                  // compute the cumulative sum of an array
                 }
                 ws [tid] = s ;
                 wk [tid] = k ;
+            }
 
-                #pragma omp barrier
-
-                // each thread computes the cumsum of its own part
-                s = 0 ;
+            #pragma omp parallel for num_threads(nthreads) schedule(static)
+            for (tid = 0 ; tid < nthreads ; tid++)
+            {
+                // each task computes the cumsum of its own part
+                int64_t istart, iend ;
+                GB_PARTITION (istart, iend, n, tid, nthreads) ;
+                int64_t s = 0 ;
                 for (int i = 0 ; i < tid ; i++)
                 { 
                     s += ws [i] ;
@@ -194,6 +228,10 @@ void GB_cumsum                  // compute the cumulative sum of an array
                 k += wk [tid] ;
             }
             (*kresult) = k ;
+
+            // free workspace
+            GB_WERK_POP (wk, int64_t) ;
+            GB_WERK_POP (ws, int64_t) ;
         }
     }
 }

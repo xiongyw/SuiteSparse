@@ -1,14 +1,10 @@
 %TESTSORT test qsort and msort
 
-clear all 
-make
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
 
-    test37
+clear all ; make
+
     test43
     test44
-
-
-
-
-
 

@@ -2,8 +2,8 @@
 // GB_red:  hard-coded functions for reductions
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -11,16 +11,14 @@
 
 #include "GB.h"
 #ifndef GBCOMPACT
-#include "GB_ek_slice.h"
+#include "GB_atomics.h"
 #include "GB_control.h" 
 #include "GB_red__include.h"
 
 // The reduction is defined by the following types and operators:
 
-// Assemble tuples:    GB_red_build__second_int32
-// Reduce to scalar:   GB_red_scalar__(none)
-// Reduce each vector: GB_red_eachvec__(none)
-// Reduce each index:  GB_red_eachindex__(none)
+// Assemble tuples:    GB (_red_build__second_int32)
+// Reduce to scalar:   GB (_red_scalar__(none))
 
 // A type:   int32_t
 // C type:   int32_t
@@ -35,10 +33,15 @@
 #define GB_CTYPE \
     int32_t
 
-// declare scalar
+// monoid identity value
 
-    #define GB_SCALAR(s)                            \
-        int32_t s
+    #define GB_IDENTITY \
+        (none)
+
+// declare a scalar and set it equal to the monoid identity value
+
+    #define GB_SCALAR_IDENTITY(s)                   \
+        int32_t s = GB_IDENTITY
 
 // Array to array
 
@@ -91,16 +94,24 @@
     #define GB_HAS_TERMINAL                         \
         0
 
+    #define GB_IS_TERMINAL(s)                       \
+        (none)
+
     #define GB_TERMINAL_VALUE                       \
         (none)
 
-    #define GB_BREAK_IF_TERMINAL(t)                 \
+    #define GB_BREAK_IF_TERMINAL(s)                 \
         ;
 
 // panel size for built-in operators
 
     #define GB_PANEL                                \
         1
+
+// special case for the ANY monoid
+
+    #define GB_IS_ANY_MONOID                        \
+        0
 
 // disable this operator and use the generic case if these conditions hold
 #define GB_DISABLE \
@@ -112,11 +123,12 @@
 
 #if 0
 
-GrB_Info GB_red_scalar__(none)
+GrB_Info GB (_red_scalar__(none))
 (
     int32_t *result,
     const GrB_Matrix A,
     GB_void *restrict W_space,
+    bool *restrict F,
     int ntasks,
     int nthreads
 )
@@ -125,62 +137,17 @@ GrB_Info GB_red_scalar__(none)
     return (GrB_NO_VALUE) ;
     #else
     int32_t s = (*result) ;
-    #include "GB_reduce_panel.c"
+    int32_t *restrict W = (int32_t *) W_space ;
+    if (A->nzombies > 0 || GB_IS_BITMAP (A))
+    {
+        #include "GB_reduce_to_scalar_template.c"
+    }
+    else
+    {
+        #include "GB_reduce_panel.c"
+    }
     (*result) = s ;
     return (GrB_SUCCESS) ;
-    #endif
-}
-
-//------------------------------------------------------------------------------
-// reduce to each vector: each vector A(:,k) reduces to a scalar Tx (k)
-//------------------------------------------------------------------------------
-
-GrB_Info GB_red_eachvec__(none)
-(
-    int32_t *restrict Tx,
-    GrB_Matrix A,
-    const int64_t *restrict kfirst_slice,
-    const int64_t *restrict klast_slice,
-    const int64_t *restrict pstart_slice,
-    GB_void *Wfirst_space,
-    GB_void *Wlast_space,
-    int ntasks,
-    int nthreads
-)
-{ 
-    #if GB_DISABLE
-    return (GrB_NO_VALUE) ;
-    #else
-    #include "GB_reduce_each_vector.c"
-    return (GrB_SUCCESS) ;
-    #endif
-}
-
-//------------------------------------------------------------------------------
-// reduce to each index: each A(i,:) reduces to a scalar T (i)
-//------------------------------------------------------------------------------
-
-GrB_Info GB_red_eachindex__(none)
-(
-    GrB_Matrix *Thandle,
-    GrB_Type ttype,
-    GrB_Matrix A,
-    const int64_t *restrict pstart_slice,
-    int nth,
-    int nthreads,
-    GB_Context Context
-)
-{ 
-    #if GB_DISABLE
-    return (GrB_NO_VALUE) ;
-    #else
-    GrB_Info info = GrB_SUCCESS ;
-    GrB_Matrix T = NULL ;
-    (*Thandle) = NULL ;
-    #define GB_FREE_ALL ;
-    #include "GB_reduce_each_index.c"
-    (*Thandle) = T ;
-    return (info) ;
     #endif
 }
 
@@ -190,7 +157,7 @@ GrB_Info GB_red_eachindex__(none)
 // build matrix
 //------------------------------------------------------------------------------
 
-GrB_Info GB_red_build__second_int32
+GrB_Info GB (_red_build__second_int32)
 (
     int32_t *restrict Tx,
     int64_t  *restrict Ti,

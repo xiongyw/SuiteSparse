@@ -1,40 +1,33 @@
 //------------------------------------------------------------------------------
-// gb_usage: check usage and make sure GxB_init has been called
+// gb_usage: check usage and make sure GrB.init has been called
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 //------------------------------------------------------------------------------
 
 #include "gb_matlab.h"
-#include "GB_printf.h"
 
-void gb_usage       // check usage and make sure GxB_init has been called
+void gb_usage       // check usage and make sure GrB.init has been called
 (
     bool ok,                // if false, then usage is not correct
-    const char *message     // error message if usage is not correct
+    const char *usage       // error message if usage is not correct
 )
 {
 
     //--------------------------------------------------------------------------
-    // register the function to clear GraphBLAS
+    // clear the debug memory table (for debugging only)
     //--------------------------------------------------------------------------
 
-    mexAtExit (gb_at_exit) ;
+    GB_Global_memtable_clear ( ) ;
 
     //--------------------------------------------------------------------------
-    // make sure GxB_init has been called
+    // make sure GrB.init has been called
     //--------------------------------------------------------------------------
 
-    if (!GB_Global_GrB_init_called_get ( ))
+    if (!GB_Global_GrB_init_called_get ( )) // TODO::: add this as GxB_get
     {
-
-        //----------------------------------------------------------------------
-        // set the printf function
-        //----------------------------------------------------------------------
-
-        GB_printf_function = mexPrintf ;
 
         //----------------------------------------------------------------------
         // initialize GraphBLAS
@@ -43,20 +36,24 @@ void gb_usage       // check usage and make sure GxB_init has been called
         OK (GxB_init (GrB_NONBLOCKING, mxMalloc, mxCalloc, mxRealloc, mxFree,
             false)) ;
 
-        //----------------------------------------------------------------------
+        // must use mexPrintf to print to MATLAB Command Window
+        OK (GxB_Global_Option_set (GxB_PRINTF, mexPrintf)) ;
+        OK (GxB_Global_Option_set (GxB_FLUSH, gb_flush)) ;
+
+        // disable the memory pool
+        int64_t free_pool_limit [64] =
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 } ;
+        OK (GxB_Global_Option_set (GxB_MEMORY_POOL, free_pool_limit)) ;
+
         // MATLAB matrices are stored by column
-        //----------------------------------------------------------------------
-
-        OK (GxB_set (GxB_FORMAT, GxB_BY_COL)) ;
-
-        // print short format by default
-        GB_Global_print_format_set (1) ;
+        OK (GxB_Global_Option_set (GxB_FORMAT, GxB_BY_COL)) ;
 
         // print 1-based indices
-        GB_Global_print_one_based_set (true) ;
+        GB_Global_print_one_based_set (true) ;      // TODO:: add to GxB_set/get
 
-        // to make the Sauna workspace persistent
-        GB_Global_persist_function_set (mexMakeMemoryPersistent) ;
+        // for debug only
+        GB_Global_abort_function_set (gb_abort) ;   // TODO:: add as GxB_set/get
     }
 
     //--------------------------------------------------------------------------
@@ -65,7 +62,7 @@ void gb_usage       // check usage and make sure GxB_init has been called
 
     if (!ok)
     {
-        ERROR (message) ;
+        ERROR (usage) ;
     }
 
     //--------------------------------------------------------------------------

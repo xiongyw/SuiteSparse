@@ -11,6 +11,9 @@ function [r,irank] = dpagerank (A)
 %
 % See also ipagerank.
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 % original problem in real arithmetic
 n = size (A,1) ;        % number of nodes
 c = 0.85 ;              % probability of walking to random neighbor

@@ -2,8 +2,8 @@
 // gbsemiringinfo: print a GraphBLAS semiring (for illustration only)
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 //------------------------------------------------------------------------------
 
@@ -13,6 +13,8 @@
 // gbsemiringinfo (semiring_string, type)
 
 #include "gb_matlab.h"
+
+#define USAGE "usage: GrB.semiringinfo (s) or GrB.semiringinfo (s,type)"
 
 void mexFunction
 (
@@ -27,8 +29,7 @@ void mexFunction
     // check inputs
     //--------------------------------------------------------------------------
 
-    gb_usage (nargin <= 2 && nargout == 0,
-    "usage: GrB.semiringinfo (semiring) or GrB.semiringinfo (semiring,type)") ;
+    gb_usage (nargin >= 1 && nargin <= 2 && nargout == 0, USAGE) ;
 
     //--------------------------------------------------------------------------
     // construct the GraphBLAS semiring and print it
@@ -39,13 +40,13 @@ void mexFunction
     gb_mxstring_to_string (opstring, LEN, pargin [0], "binary operator") ;
 
     GrB_Type type = NULL ;
-    if (nargin == 2)
+    if (nargin > 1)
     { 
         type = gb_mxstring_to_type (pargin [1]) ;
         CHECK_ERROR (type == NULL, "unknown type") ;
     }
 
-    GrB_Semiring semiring = gb_mxstring_to_semiring (pargin [0], type) ;
+    GrB_Semiring semiring = gb_mxstring_to_semiring (pargin [0], type, type) ;
     OK (GxB_Semiring_fprint (semiring, opstring, GxB_COMPLETE, NULL)) ;
     GB_WRAPUP ;
 }

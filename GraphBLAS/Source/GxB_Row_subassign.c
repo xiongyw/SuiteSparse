@@ -2,8 +2,8 @@
 // GxB_Row_subassign: C(row,Cols)<M'> = accum (C(row,Cols),u')
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -28,7 +28,8 @@ GrB_Info GxB_Row_subassign          // C(row,Cols)<M'> += u'
     // check inputs
     //--------------------------------------------------------------------------
 
-    GB_WHERE ("GxB_Row_subassign (C, M, accum, u, row, Cols, nCols, desc)") ;
+    GB_WHERE (C, "GxB_Row_subassign (C, M, accum, u, row, Cols, nCols, desc)") ;
+    GB_BURBLE_START ("GxB_subassign") ;
     GB_RETURN_IF_NULL_OR_FAULTY (C) ;
     GB_RETURN_IF_FAULTY (M) ;
     GB_RETURN_IF_NULL_OR_FAULTY (u) ;
@@ -36,7 +37,8 @@ GrB_Info GxB_Row_subassign          // C(row,Cols)<M'> += u'
     ASSERT (GB_VECTOR_OK (u)) ;
 
     // get the descriptor
-    GB_GET_DESCRIPTOR (info, desc, C_replace, Mask_comp, xx1, xx2, xx3) ;
+    GB_GET_DESCRIPTOR (info, desc, C_replace, Mask_comp, Mask_struct,
+        xx1, xx2, xx3, xx7) ;
 
     //--------------------------------------------------------------------------
     // C(row,Cols)<M'> = accum (C(row,Cols), u')
@@ -46,14 +48,17 @@ GrB_Info GxB_Row_subassign          // C(row,Cols)<M'> += u'
     GrB_Index Rows [1] ;
     Rows [0] = row ;
 
-    return (GB_subassign (
+    info = GB_subassign (
         C,                  C_replace,      // C matrix and its descriptor
-        (GrB_Matrix) M,     Mask_comp,      // mask and its descriptor
+        (GrB_Matrix) M, Mask_comp, Mask_struct, // mask and its descriptor
         true,                               // transpose the mask
         accum,                              // for accum (C(Rows,col),u)
         (GrB_Matrix) u,     true,           // u as a matrix; always transposed
         Rows, 1,                            // a single row index
         Cols, nCols,                        // column indices
         false, NULL, GB_ignore_code,        // no scalar expansion
-        Context)) ;
+        Context) ;
+
+    GB_BURBLE_END ;
+    return (info) ;
 }

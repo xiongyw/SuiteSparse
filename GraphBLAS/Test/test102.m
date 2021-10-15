@@ -1,7 +1,10 @@
 function test102
-%TEST102 test GB_AxB_flopcount
+%TEST102 test GB_AxB_saxpy3_flopcount
 
-fprintf ('\ntest102: testing GB_AxB_flopcount\n') ;
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
+fprintf ('\ntest102: testing GB_AxB_saxpy3_flopcount\n') ;
 
 rng ('default') ;
 
@@ -30,26 +33,26 @@ for m = [0 1 10 100]
                 Ahyper.is_hyper = true ;
 
                 % flop counts for C=A*B
-                mflops = flopcount ([ ], A, B) ;
+                mflops = flopcount ([ ], 0, A, B) ;
                 total = mflops (end) ;
 
-                floptest ([ ], A, B, m, mflops) ;
-                floptest ([ ], Ahyper, Bhyper, m, total) ;
-                floptest ([ ], Ahyper, B, m, total) ;
-                floptest ([ ], A, Bhyper, m, total) ;
+                floptest ([ ], 0, A, B, mflops) ;
+                floptest ([ ], 0, Ahyper, Bhyper, total) ;
+                floptest ([ ], 0, Ahyper, B, total) ;
+                floptest ([ ], 0, A, Bhyper, total) ;
 
                 % flop counts for C<M>=A*B
-                mflops = flopcount (M, A, B) ;
+                mflops = flopcount (M, 0, A, B) ;
                 total = mflops (end) ;
 
-                floptest (M, A, B, m, mflops) ;
-                floptest (M, A, Bhyper, m, total) ;
-                floptest (M, Ahyper, B, m, total) ;
-                floptest (M, Ahyper, Bhyper, m, total) ;
-                floptest (Mhyper, A, B, m, total) ;
-                floptest (Mhyper, Ahyper, B, m, total) ;
-                floptest (Mhyper, A, Bhyper, m, total) ;
-                floptest (Mhyper, A, B, m, total) ;
+                floptest (M, 0, A, B, mflops) ;
+                floptest (M, 0, A, Bhyper, total) ;
+                floptest (M, 0, Ahyper, B, total) ;
+                floptest (M, 0, Ahyper, Bhyper, total) ;
+                floptest (Mhyper, 0, A, B, total) ;
+                floptest (Mhyper, 0, Ahyper, B, total) ;
+                floptest (Mhyper, 0, A, Bhyper, total) ;
+                floptest (Mhyper, 0, A, B, total) ;
 
             end
         end

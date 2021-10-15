@@ -3,6 +3,9 @@ function test118
 
 % test C(:,:)<M> = A
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 fprintf ('test118 ----------------------------------- C(:,:)<M> = A\n') ;
 
 [save save_chunk] = nthreads_get ;

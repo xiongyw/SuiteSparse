@@ -2,8 +2,8 @@
 # GraphBLAS/Tcov/Makefile
 #-------------------------------------------------------------------------------
 
-#  SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-#  http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+# SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 #-------------------------------------------------------------------------------
 
@@ -27,15 +27,15 @@ INC = tmp_include/*
 SRC2 = $(notdir $(wildcard $(SRC)))
 OBJ = $(SRC2:.c=.o)
 LDFLAGS = -fopenmp
-CFLAGS = -g -std=c11 -fopenmp -fexceptions -fPIC -Wno-pragmas -DGBTESTCOV
-CPPFLAGS = -Itmp_include -DGBCOVER
+CFLAGS = -g -std=c11 -fopenmp -fexceptions -fPIC -Wno-pragmas
+CPPFLAGS = -Itmp_include -DGBCOVER $(RENAME)
 SO_OPTS = $(LDFLAGS)
 
 ifeq ($(UNAME),Darwin)
     # Mac
     CFLAGS += -fno-common
     SO_NAME = libgraphblas_tcov.dylib
-    SO_OPTS += -dynamiclib -shared -undefined dynamic_lookup
+    SO_OPTS += -dynamiclib -shared -Wl,-install_name -Wl,$(SO_NAME) -undefined dynamic_lookup
 else
     # Linux
     SO_NAME = libgraphblas_tcov.so
@@ -62,3 +62,7 @@ distclean: clean
 purge: distclean
 	$(RM) log.txt
 
+config:
+	@echo "CFLAGS:   " $(CFLAGS)
+	@echo "CPPFLAGS: " $(CPPFLAGS)
+	@echo "LDFLAGS:  " $(LDFLAGS)

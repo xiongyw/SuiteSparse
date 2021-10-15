@@ -2,8 +2,8 @@
 // GB_sel:  hard-coded functions for selection operators
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -15,11 +15,12 @@
 
 // The selection is defined by the following types and operators:
 
-// phase1: GB_sel_phase1
-// phase2: GB_sel_phase2
+// functions:
+// phase1: GB (_sel_phase1)
+// phase2: GB (_sel_phase2)
+// bitmap: GB (_sel_bitmap)
 
-// A type:   GB_atype
-// selectop: (GB_SELECT_OP(p))
+// A type: GB_atype
 
 // kind
 GB_kind
@@ -27,44 +28,17 @@ GB_kind
 #define GB_ATYPE \
     GB_atype
 
-// test Ax [p]
-#define GB_SELECT(p)                                    \
-    (GB_SELECT_OP(p))
+// test value of Ax [p]
+#define GB_TEST_VALUE_OF_ENTRY(p)                       \
+    GB_test_value_of_entry(p)
 
 // get the vector index (user select operators only)
 #define GB_GET_J                                        \
     GB_get_j
 
-// W [k] = s, no typecast
-#define GB_COPY_SCALAR_TO_ARRAY(W,k,s)                  \
-    W [k] = s
-
-// W [k] = S [i], no typecast
-#define GB_COPY_ARRAY_TO_ARRAY(W,k,S,i)                 \
-    W [k] = S [i]
-
-// W [k] += S [i], no typecast
-#define GB_ADD_ARRAY_TO_ARRAY(W,k,S,i)                  \
-    W [k] += S [i]
-
-// no terminal value
-#define GB_BREAK_IF_TERMINAL(t) ;
-
-// ztype s = (ztype) Ax [p], with typecast
-#define GB_CAST_ARRAY_TO_SCALAR(s,Ax,p)                 \
-    s = GB_SELECT (p)
-
-// s += (ztype) Ax [p], with typecast
-#define GB_ADD_CAST_ARRAY_TO_SCALAR(s,Ax,p)             \
-    s += GB_SELECT (p)
-
 // Cx [pC] = Ax [pA], no typecast
 #define GB_SELECT_ENTRY(Cx,pC,Ax,pA)                    \
     GB_select_entry
-
-// declare scalar for GB_reduce_each_vector
-#define GB_SCALAR(s)                                    \
-    int64_t s
 
 //------------------------------------------------------------------------------
 // GB_sel_phase1
@@ -72,25 +46,20 @@ GB_kind
 
 if_phase1
 
-void GB_sel_phase1
+void GB (_sel_phase1)
 (
     int64_t *restrict Zp,
     int64_t *restrict Cp,
-    GB_void *restrict Wfirst_space,
-    GB_void *restrict Wlast_space,
+    int64_t *restrict Wfirst,
+    int64_t *restrict Wlast,
     const GrB_Matrix A,
-    const int64_t *restrict kfirst_slice,
-    const int64_t *restrict klast_slice,
-    const int64_t *restrict pstart_slice,
     const bool flipij,
     const int64_t ithunk,
     const GB_atype *restrict xthunk,
     const GxB_select_function user_select,
-    const int ntasks,
-    const int nthreads
+    const int64_t *A_ek_slicing, const int A_ntasks, const int A_nthreads
 )
 { 
-    int64_t *restrict Tx = Cp ;
     GB_get_thunk
     #include "GB_select_phase1.c"
 }
@@ -101,26 +70,46 @@ endif_phase1
 // GB_sel_phase2
 //------------------------------------------------------------------------------
 
-void GB_sel_phase2
+void GB (_sel_phase2)
 (
     int64_t *restrict Ci,
     GB_atype *restrict Cx,
     const int64_t *restrict Zp,
     const int64_t *restrict Cp,
-    const int64_t *restrict C_pstart_slice,
+    const int64_t *restrict Cp_kfirst,
     const GrB_Matrix A,
-    const int64_t *restrict kfirst_slice,
-    const int64_t *restrict klast_slice,
-    const int64_t *restrict pstart_slice,
     const bool flipij,
     const int64_t ithunk,
     const GB_atype *restrict xthunk,
     const GxB_select_function user_select,
-    const int ntasks,
-    const int nthreads
+    const int64_t *A_ek_slicing, const int A_ntasks, const int A_nthreads
 )
 { 
     GB_get_thunk
     #include "GB_select_phase2.c"
 }
 
+//------------------------------------------------------------------------------
+// GB_sel_bitmap
+//------------------------------------------------------------------------------
+
+if_bitmap
+
+void GB (_sel_bitmap)
+(
+    int8_t *Cb,
+    GB_atype *restrict Cx,
+    int64_t *cnvals_handle,
+    GrB_Matrix A,
+    const bool flipij,
+    const int64_t ithunk,
+    const GB_atype *restrict xthunk,
+    const GxB_select_function user_select,
+    const int nthreads
+)
+{ 
+    GB_get_thunk
+    #include "GB_bitmap_select_template.c"
+}
+
+endif_bitmap

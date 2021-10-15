@@ -1,9 +1,12 @@
 function [parent, varargout] = etree (G, varargin)
-%ETREE Elimination tree of a GraphBLAS matrix.
+%ETREE elimination tree of a GraphBLAS matrix.
 % See 'help etree' for details.
+%
+% See also GrB/amd.
 
-% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-% http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: GPL-3.0-or-later
 
-[parent, varargout{1:nargout-1}] = builtin ('etree', logical (G), varargin {:});
+G = logical (G) ;
+[parent, varargout{1:nargout-1}] = builtin ('etree', G, varargin {:}) ;
 

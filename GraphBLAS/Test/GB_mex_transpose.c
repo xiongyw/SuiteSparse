@@ -2,8 +2,8 @@
 // GB_mex_transpose: transpose a sparse matrix and return it to MATLAB
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -15,11 +15,17 @@
 
 #define FREE_ALL                        \
 {                                       \
-    GB_MATRIX_FREE (&A) ;               \
-    GB_MATRIX_FREE (&C) ;               \
-    GB_MATRIX_FREE (&M) ;               \
-    GrB_free (&desc) ;                  \
-    GB_mx_put_global (true, 0) ;        \
+    bool A_is_M = (A == M) ;            \
+    bool A_is_C = (A == C) ;            \
+    bool C_is_M = (C == M) ;            \
+    GrB_Matrix_free_(&A) ;              \
+    if (A_is_C) C = NULL ;              \
+    if (A_is_M) M = NULL ;              \
+    GrB_Matrix_free_(&C) ;              \
+    if (C_is_M) M = NULL ;              \
+    GrB_Matrix_free_(&M) ;              \
+    GrB_Descriptor_free_(&desc) ;       \
+    GB_mx_put_global (true) ;           \
 }
 
 void mexFunction
@@ -38,7 +44,6 @@ void mexFunction
     GrB_Descriptor desc = NULL ;
 
     // check inputs
-    GB_WHERE (USAGE) ;
     if (nargout > 1 || nargin < 4 || nargin > 6)
     {
         mexErrMsgTxt ("Usage: " USAGE) ;
@@ -67,24 +72,43 @@ void mexFunction
     }
 
     // get C (make a deep copy) and get any aliases for M and A
-    #define GET_DEEP_COPY \
-    C = GB_mx_mxArray_to_Matrix (pargin [0], "C input", true, true) ;          \
-    if (nargin > 5 && C != NULL) C->nvec_nonempty = -1 ;  /* for testing */    \
-    if (mxIsChar (pargin [1])) M = GB_mx_alias ("M", pargin [1], "C",C, "A",A);\
-    if (mxIsChar (pargin [3])) A = GB_mx_alias ("A", pargin [3], "C",C, "M",M);
-    #define FREE_DEEP_COPY GB_MATRIX_FREE (&C) ;
+    #define GET_DEEP_COPY                                                   \
+    {                                                                       \
+        C = GB_mx_mxArray_to_Matrix (pargin [0], "C input", true, true) ;   \
+        if (nargin > 5 && C != NULL)                                        \
+        {                                                                   \
+            C->nvec_nonempty = -1 ;  /* for testing */                      \
+        }                                                                   \
+        if (mxIsChar (pargin [1]))                                          \
+        {                                                                   \
+            M = GB_mx_alias ("M", pargin [1], "C", C, "A", A) ;             \
+        }                                                                   \
+        if (mxIsChar (pargin [3]))                                          \
+        {                                                                   \
+            A = GB_mx_alias ("A", pargin [3], "C", C, "M", M) ;             \
+        }                                                                   \
+    }
+
+    #define FREE_DEEP_COPY          \
+    {                               \
+        if (A == C) A = NULL ;      \
+        if (M == C) M = NULL ;      \
+        GrB_Matrix_free_(&C) ;      \
+    }
+
     GET_DEEP_COPY ;
     if (C == NULL)
     {
         FREE_ALL ;
         mexErrMsgTxt ("C failed") ;
     }
-    mxClassID cclass = GB_mx_Type_to_classID (C->type) ;
 
-    // get accum; default: NOP, default class is class(C)
+    // get accum; default: NOP, default is C->type
+    bool user_complex = (Complex != GxB_FC64)
+        && (C->type == Complex || A->type == Complex) ;
     GrB_BinaryOp accum ;
     if (!GB_mx_mxArray_to_BinaryOp (&accum, pargin [2], "accum",
-        GB_NOP_opcode, cclass, C->type == Complex, A->type == Complex))
+        C->type, user_complex))
     {
         FREE_ALL ;
         mexErrMsgTxt ("accum failed") ;
@@ -109,7 +133,10 @@ void mexFunction
     METHOD (GrB_transpose (C, M, accum, A, desc)) ;
 
     // return C to MATLAB as a struct and free the GraphBLAS C
+    if (C == A) A = NULL ;      // do not free A if it is aliased to C
+    if (C == M) M = NULL ;      // do not free M if it is aliased to C
     pargout [0] = GB_mx_Matrix_to_mxArray (&C, "C output", true) ;
+    // C is now NULL
 
     FREE_ALL ;
 }

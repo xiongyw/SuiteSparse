@@ -21,6 +21,9 @@ function [r,irank,iters] = dpagerank2 (A, tol, itermax)
 %
 % See also ipagerank.
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 if (nargin < 2)
     tol = 1e-5 ;        % stopping criterion
 end
@@ -32,9 +35,9 @@ end
 % original problem in real arithmetic
 n = size (A,1) ;        % number of nodes
 c = 0.85 ;              % probability of walking to random neighbor
-r = ones (1,n) / n ;    % initial uniform probability
-% r = rand (1,n) ;        % random initial pageranks
-% r = r / sum (r) ;       % normalize so sum(r) == 1
+r = ones (1,n) / n ;    % initial probability
+% r = rand (1,n) ;      % random initial pageranks
+% r = r / sum (r) ;     % normalize so sum(r) == 1
 a = (1-c) / n ;         % to jump to any random node in entire graph
 C = c * rowscale (A) ;  % scale A by out-degree and damping factor
 

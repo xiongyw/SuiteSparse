@@ -2,16 +2,19 @@
 // GB_subassign_one_slice: slice the entries and vectors for subassign
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
 // Constructs a set of tasks to compute C for a subassign method, based on
 // slicing a single input matrix (M or A).  Fine tasks must also find their
-// location in their vector C(:,jC).
+// location in their vector C(:,jC).  Currently this method is only used to
+// slice M, not A.
 
-// This method is used by GB_subassign_05, 06n, and 07
+// This method is used by GB_subassign_05, 06n, and 07.  Each of those methods
+// apply this function to M, but they use TaskList[...].pA and pA_end to
+// partition the matrix.
 
         //  =====================       ==============
         //  M   cmp rpl acc A   S       method: action
@@ -20,17 +23,21 @@
         //  M   -   -   +   -   -       07:  C(I,J)<M> += x      for M
         //  M   -   -   -   A   -       06n: C(I,J)<M> = A       for M
 
+// C: not bitmap
+
 #include "GB_subassign_methods.h"
 
 #undef  GB_FREE_WORK
-#define GB_FREE_WORK \
-    GB_FREE_MEMORY (Coarse, ntasks1+1, sizeof (int64_t)) ;
+#define GB_FREE_WORK                \
+{                                   \
+    GB_WERK_POP (Coarse, int64_t) ; \
+}
 
 #undef  GB_FREE_ALL
-#define GB_FREE_ALL                                                     \
-{                                                                       \
-    GB_FREE_WORK ;                                                      \
-    GB_FREE_MEMORY (TaskList, max_ntasks+1, sizeof (GB_task_struct)) ;  \
+#define GB_FREE_ALL                             \
+{                                               \
+    GB_FREE_WORK ;                              \
+    GB_FREE_WERK (&TaskList, TaskList_size) ;   \
 }
 
 //------------------------------------------------------------------------------
@@ -40,8 +47,8 @@
 GrB_Info GB_subassign_one_slice
 (
     // output:
-    GB_task_struct **p_TaskList,    // array of structs, of size max_ntasks
-    int *p_max_ntasks,              // size of TaskList
+    GB_task_struct **p_TaskList,    // array of structs
+    size_t *p_TaskList_size,        // size of TaskList
     int *p_ntasks,                  // # of tasks constructed
     int *p_nthreads,                // # of threads to use
     // input:
@@ -54,7 +61,7 @@ GrB_Info GB_subassign_one_slice
     const int64_t nJ,
     const int Jkind,
     const int64_t Jcolon [3],
-    const GrB_Matrix A,             // matrix to slice (M or A)
+    const GrB_Matrix M,             // matrix to slice
     GB_Context Context
 )
 {
@@ -64,14 +71,17 @@ GrB_Info GB_subassign_one_slice
     //--------------------------------------------------------------------------
 
     ASSERT (p_TaskList != NULL) ;
-    ASSERT (p_max_ntasks != NULL) ;
     ASSERT (p_ntasks != NULL) ;
     ASSERT (p_nthreads != NULL) ;
-    ASSERT_OK (GB_check (C, "C for 1_slice", GB0)) ;
-    ASSERT_OK (GB_check (A, "A/M for 1_slice", GB0)) ;
+    ASSERT_MATRIX_OK (C, "C for 1_slice", GB0) ;
+    ASSERT_MATRIX_OK (M, "M for 1_slice", GB0) ;
+
+    ASSERT (!GB_IS_BITMAP (C)) ;
+
+    ASSERT (!GB_JUMBLED (C)) ;
+    ASSERT (!GB_JUMBLED (M)) ;
 
     (*p_TaskList  ) = NULL ;
-    (*p_max_ntasks) = 0 ;
     (*p_ntasks    ) = 0 ;
     (*p_nthreads  ) = 1 ;
 
@@ -82,48 +92,50 @@ GrB_Info GB_subassign_one_slice
     GB_GET_NTHREADS_MAX (nthreads_max, chunk, Context) ;
 
     //--------------------------------------------------------------------------
-    // get A and C
+    // get M and C
     //--------------------------------------------------------------------------
 
-    const int64_t *restrict Ap = A->p ;
-    const int64_t *restrict Ah = A->h ;
-    const int64_t *restrict Ai = A->i ;
-    const int64_t anz = GB_NNZ (A) ;
-    const int64_t anvec = A->nvec ;
+    const int64_t *restrict Mp = M->p ;
+    const int64_t *restrict Mh = M->h ;
+//  const int8_t  *restrict Mb = M->b ;
+    const int64_t *restrict Mi = M->i ;
+    const int64_t mnz = GB_NNZ_HELD (M) ;
+    const int64_t mnvec = M->nvec ;
+    const int64_t mvlen = M->vlen ;
 
     const int64_t *restrict Cp = C->p ;
     const int64_t *restrict Ch = C->h ;
     const int64_t *restrict Ci = C->i ;
-    const bool C_is_hyper = C->is_hyper ;
+    const bool C_is_hyper = (Ch != NULL) ;
     const int64_t nzombies = C->nzombies ;
     const int64_t Cnvec = C->nvec ;
-    const int64_t cvlen = C->vlen ;
+    const int64_t Cvlen = C->vlen ;
 
     //--------------------------------------------------------------------------
     // allocate the initial TaskList
     //--------------------------------------------------------------------------
 
-    int64_t *restrict Coarse = NULL ; // size ntasks1+1
+    GB_WERK_DECLARE (Coarse, int64_t) ;     // size ntasks1+1
     int ntasks1 = 0 ;
-    int nthreads = GB_nthreads (anz, chunk, nthreads_max) ;
-    GB_task_struct *restrict TaskList = NULL ;
+    int nthreads = GB_nthreads (mnz, chunk, nthreads_max) ;
+    GB_task_struct *restrict TaskList = NULL ; size_t TaskList_size = 0 ;
     int max_ntasks = 0 ;
     int ntasks = 0 ;
     int ntasks0 = (nthreads == 1) ? 1 : (32 * nthreads) ;
-    GB_REALLOC_TASK_LIST (TaskList, ntasks0, max_ntasks) ;
+    GB_REALLOC_TASK_WERK (TaskList, ntasks0, max_ntasks) ;
 
     //--------------------------------------------------------------------------
     // check for quick return for a single task
     //--------------------------------------------------------------------------
 
-    if (anvec == 0 || ntasks0 == 1)
+    if (mnvec == 0 || ntasks0 == 1)
     { 
         // construct a single coarse task that does all the work
         TaskList [0].kfirst = 0 ;
-        TaskList [0].klast  = anvec-1 ;
+        TaskList [0].klast  = mnvec-1 ;
         (*p_TaskList  ) = TaskList ;
-        (*p_max_ntasks) = max_ntasks ;
-        (*p_ntasks    ) = (anvec == 0) ? 0 : 1 ;
+        (*p_TaskList_size) = TaskList_size ;
+        (*p_ntasks    ) = (mnvec == 0) ? 0 : 1 ;
         (*p_nthreads  ) = 1 ;
         return (GrB_SUCCESS) ;
     }
@@ -132,21 +144,24 @@ GrB_Info GB_subassign_one_slice
     // determine # of threads and tasks for the subassign operation
     //--------------------------------------------------------------------------
 
-    double target_task_size = ((double) anz) / (double) (ntasks0) ;
+    double target_task_size = ((double) mnz) / (double) (ntasks0) ;
     target_task_size = GB_IMAX (target_task_size, chunk) ;
-    ntasks1 = ((double) anz) / target_task_size ;
+    ntasks1 = ((double) mnz) / target_task_size ;
     ntasks1 = GB_IMAX (ntasks1, 1) ;
 
     //--------------------------------------------------------------------------
     // slice the work into coarse tasks
     //--------------------------------------------------------------------------
 
-    if (!GB_pslice (&Coarse, /* A */ A->p, A->nvec, ntasks1))
-    {
+    // M may be hypersparse, sparse, bitmap, or full
+    GB_WERK_PUSH (Coarse, ntasks1 + 1, int64_t) ;
+    if (Coarse == NULL)
+    { 
         // out of memory
         GB_FREE_ALL ;
-        return (GB_OUT_OF_MEMORY) ;
+        return (GrB_OUT_OF_MEMORY) ;
     }
+    GB_pslice (Coarse, Mp, mnvec, ntasks1, false) ;
 
     //--------------------------------------------------------------------------
     // construct all tasks, both coarse and fine
@@ -156,13 +171,13 @@ GrB_Info GB_subassign_one_slice
     {
 
         //----------------------------------------------------------------------
-        // coarse task computes C (I, J(k:klast)) = A (I, k:klast)
+        // coarse task computes C (I, J(k:klast)) = M (I, k:klast)
         //----------------------------------------------------------------------
 
         int64_t k = Coarse [t] ;
-        int64_t klast  = Coarse [t+1] - 1 ;
+        int64_t klast = Coarse [t+1] - 1 ;
 
-        if (k >= anvec)
+        if (k >= mnvec)
         { 
 
             //------------------------------------------------------------------
@@ -180,11 +195,10 @@ GrB_Info GB_subassign_one_slice
             //------------------------------------------------------------------
 
             // This is a non-empty coarse-grain task that does two or more
-            // entire vectors of A, vectors k:klast, inclusive.
-            GB_REALLOC_TASK_LIST (TaskList, ntasks + 1, max_ntasks) ;
+            // entire vectors of M, vectors k:klast, inclusive.
+            GB_REALLOC_TASK_WERK (TaskList, ntasks + 1, max_ntasks) ;
             TaskList [ntasks].kfirst = k ;
             TaskList [ntasks].klast  = klast ;
-            // printf ("%d: coarse "GBd":"GBd"\n", ntasks, k, klast) ;
             ntasks++ ;
 
         }
@@ -219,25 +233,23 @@ GrB_Info GB_subassign_one_slice
             // get the vector of C
             //------------------------------------------------------------------
 
-            ASSERT (k >= 0 && k < anvec) ;
-            int64_t j = (Ah == NULL) ? k : Ah [k] ;
+            ASSERT (k >= 0 && k < mnvec) ;
+            int64_t j = GBH (Mh, k) ;
             ASSERT (j >= 0 && j < nJ) ;
-            // printf ("J %p j "GBd" jkind %d Jcolon "GBd" "GBd" "GBd"\n",
-            //     J, j, Jkind, Jcolon [0], Jcolon [1], Jcolon [2]) ;
             int64_t GB_LOOKUP_jC ;
 
-            bool jC_dense = (pC_end - pC_start == cvlen) ;
+            bool jC_dense = (pC_end - pC_start == Cvlen) ;
 
             //------------------------------------------------------------------
             // determine the # of fine-grain tasks to create for vector k
             //------------------------------------------------------------------
 
-            int64_t aknz = Ap [k+1] - Ap [k] ;
-            int nfine = ((double) aknz) / target_task_size ;
+            int64_t mknz = (Mp == NULL) ? mvlen : (Mp [k+1] - Mp [k]) ;
+            int nfine = ((double) mknz) / target_task_size ;
             nfine = GB_IMAX (nfine, 1) ;
 
             // make the TaskList bigger, if needed
-            GB_REALLOC_TASK_LIST (TaskList, ntasks + nfine, max_ntasks) ;
+            GB_REALLOC_TASK_WERK (TaskList, ntasks + nfine, max_ntasks) ;
 
             //------------------------------------------------------------------
             // create the fine-grain tasks
@@ -252,7 +264,6 @@ GrB_Info GB_subassign_one_slice
 
                 TaskList [ntasks].kfirst = k ;
                 TaskList [ntasks].klast  = k ;
-                // printf ("%d: thin coarse "GBd":"GBd"\n", ntasks, k, k) ;
                 ntasks++ ;
 
             }
@@ -260,7 +271,7 @@ GrB_Info GB_subassign_one_slice
             {
 
                 //--------------------------------------------------------------
-                // slice vector A(:,k) into nfine fine tasks
+                // slice vector M(:,k) into nfine fine tasks
                 //--------------------------------------------------------------
 
                 ASSERT (ntasks < max_ntasks) ;
@@ -268,17 +279,18 @@ GrB_Info GB_subassign_one_slice
                 for (int tfine = 0 ; tfine < nfine ; tfine++)
                 {
 
-                    // this fine task operates on vector A(:,k)
+                    // this fine task operates on vector M(:,k)
                     TaskList [ntasks].kfirst = k ;
                     TaskList [ntasks].klast  = -1 ;
 
-                    // slice A(:,k) for this task
+                    // slice M(:,k) for this task
                     int64_t p1, p2 ;
-                    GB_PARTITION (p1, p2, aknz, tfine, nfine) ;
-                    int64_t pA     = Ap [k] + p1 ;
-                    int64_t pA_end = Ap [k] + p2 ;
-                    TaskList [ntasks].pA     = pA ;
-                    TaskList [ntasks].pA_end = pA_end ;
+                    GB_PARTITION (p1, p2, mknz, tfine, nfine) ;
+                    int64_t pM_start = GBP (Mp, k, mvlen) ;
+                    int64_t pM     = pM_start + p1 ;
+                    int64_t pM_end = pM_start + p2 ;
+                    TaskList [ntasks].pA     = pM ;
+                    TaskList [ntasks].pA_end = pM_end ;
 
                     if (jC_dense)
                     { 
@@ -289,10 +301,10 @@ GrB_Info GB_subassign_one_slice
                     else
                     { 
                         // find where this task starts and ends in C(:,jC)
-                        int64_t iA_start = Ai [pA] ;
-                        int64_t iC1 = GB_ijlist (I, iA_start, Ikind, Icolon) ;
-                        int64_t iA_end = Ai [pA_end-1] ;
-                        int64_t iC2 = GB_ijlist (I, iA_end, Ikind, Icolon) ;
+                        int64_t iM_start = GBI (Mi, pM, mvlen) ;
+                        int64_t iC1 = GB_ijlist (I, iM_start, Ikind, Icolon) ;
+                        int64_t iM_end = GBI (Mi, pM_end-1, mvlen) ;
+                        int64_t iC2 = GB_ijlist (I, iM_end, Ikind, Icolon) ;
 
                         // If I is an explicit list, it must be already sorted
                         // in ascending order, and thus iC1 <= iC2.  If I is
@@ -303,32 +315,20 @@ GrB_Info GB_subassign_one_slice
                         int64_t iC_start = GB_IMIN (iC1, iC2) ;
                         int64_t iC_end   = GB_IMAX (iC1, iC2) ;
 
-                        // printf ("\niA_start "GBd"\n", iA_start) ;
-                        // printf ("iA_end   "GBd"\n", iA_end) ;
-
-                        // printf ("\niC_start "GBd"\n", iC_start) ;
-                        // printf ("iC_end   "GBd"\n", iC_end) ;
-
                         // this task works on Ci,Cx [pC:pC_end-1]
                         int64_t pleft = pC_start ;
                         int64_t pright = pC_end - 1 ;
                         bool found, is_zombie ;
-                        GB_BINARY_SPLIT_ZOMBIE (iC_start, Ci, pleft, pright,
-                            found, nzombies, is_zombie) ;
+                        GB_SPLIT_BINARY_SEARCH_ZOMBIE (iC_start, Ci,
+                            pleft, pright, found, nzombies, is_zombie) ;
                         TaskList [ntasks].pC = pleft ;
 
                         pleft = pC_start ;
                         pright = pC_end - 1 ;
-                        GB_BINARY_SPLIT_ZOMBIE (iC_end, Ci, pleft, pright,
-                            found, nzombies, is_zombie) ;
+                        GB_SPLIT_BINARY_SEARCH_ZOMBIE (iC_end, Ci,
+                            pleft, pright, found, nzombies, is_zombie) ;
                         TaskList [ntasks].pC_end = (found) ? (pleft+1) : pleft ;
                     }
-
-                    // printf ("%d: fine "GBd": pA "GBd" pA_end "GBd
-                    //    " pC "GBd" pC_end "GBd"\n",
-                    //    ntasks, k,
-                    //    TaskList [ntasks].pA, TaskList [ntasks].pA_end,
-                    //    TaskList [ntasks].pC, TaskList [ntasks].pC_end) ;
 
                     ASSERT (TaskList [ntasks].pA <= TaskList [ntasks].pA_end) ;
                     ASSERT (TaskList [ntasks].pC <= TaskList [ntasks].pC_end) ;
@@ -346,7 +346,7 @@ GrB_Info GB_subassign_one_slice
 
     GB_FREE_WORK ;
     (*p_TaskList  ) = TaskList ;
-    (*p_max_ntasks) = max_ntasks ;
+    (*p_TaskList_size) = TaskList_size ;
     (*p_ntasks    ) = ntasks ;
     (*p_nthreads  ) = nthreads ;
     return (GrB_SUCCESS) ;

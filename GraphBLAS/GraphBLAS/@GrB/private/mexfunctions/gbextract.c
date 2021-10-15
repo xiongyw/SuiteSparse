@@ -2,8 +2,8 @@
 // gbextract: extract entries into a GraphBLAS matrix
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 //------------------------------------------------------------------------------
 
@@ -15,15 +15,15 @@
 
 // Usage:
 
-//      Cout = gbextract (Cin, M, accum, A, I, J, desc)
+//      C = gbextract (Cin, M, accum, A, I, J, desc)
 
-// A and desc are required.  See GrB.m for more details.
+// A is required.  See GrB.m for more details.
 // If accum or M is used, then Cin must appear.
 
 #include "gb_matlab.h"
 #include "GB_ij.h"
 
-#define USAGE "usage: Cout = GrB.extract (Cin, M, accum, A, I, J, desc)"
+#define USAGE "usage: C = GrB.extract (Cin, M, accum, A, I, J, desc)"
 
 void mexFunction
 (
@@ -38,7 +38,7 @@ void mexFunction
     // check inputs
     //--------------------------------------------------------------------------
 
-    gb_usage (nargin >= 2 && nargin <= 7 && nargout <= 1, USAGE) ;
+    gb_usage (nargin >= 1 && nargin <= 7 && nargout <= 2, USAGE) ;
 
     //--------------------------------------------------------------------------
     // find the arguments
@@ -48,10 +48,10 @@ void mexFunction
     base_enum_t base ;
     kind_enum_t kind ;
     GxB_Format_Value fmt ;
-    int nmatrices, nstrings, ncells ;
+    int nmatrices, nstrings, ncells, sparsity ;
     GrB_Descriptor desc ;
     gb_get_mxargs (nargin, pargin, USAGE, Matrix, &nmatrices, String, &nstrings,
-        Cell, &ncells, &desc, &base, &kind, &fmt) ;
+        Cell, &ncells, &desc, &base, &kind, &fmt, &sparsity) ;
 
     CHECK_ERROR (nmatrices < 1 || nmatrices > 3 || nstrings > 1, USAGE) ;
 
@@ -94,7 +94,7 @@ void mexFunction
     { 
         // if accum appears, then Cin must also appear
         CHECK_ERROR (C == NULL, USAGE) ;
-        accum  = gb_mxstring_to_binop  (String [0], ctype) ;
+        accum  = gb_mxstring_to_binop  (String [0], ctype, ctype) ;
     }
 
     //--------------------------------------------------------------------------
@@ -102,7 +102,7 @@ void mexFunction
     //--------------------------------------------------------------------------
 
     GrB_Desc_Value in0 ;
-    OK (GxB_get (desc, GrB_INP0, &in0)) ;
+    OK (GxB_Desc_get (desc, GrB_INP0, &in0)) ;
     GrB_Index anrows, ancols ;
     bool A_transpose = (in0 == GrB_TRAN) ;
     if (A_transpose)
@@ -156,28 +156,29 @@ void mexFunction
         int I_kind, J_kind ;
         int64_t I_colon [3], J_colon [3] ;
         GrB_Index cnrows, cncols ;
-        GB_ijlength (I, ni, anrows, &cnrows, &I_kind, I_colon) ;
-        GB_ijlength (J, nj, ancols, &cncols, &J_kind, J_colon) ;
+        GB_ijlength (I, ni, anrows, (int64_t *) &cnrows, &I_kind, I_colon) ;
+        GB_ijlength (J, nj, ancols, (int64_t *) &cncols, &J_kind, J_colon) ;
         ctype = atype ;
 
-        OK (GrB_Matrix_new (&C, ctype, cnrows, cncols)) ;
+        // create the matrix C and set its format and sparsity
         fmt = gb_get_format (cnrows, cncols, A, NULL, fmt) ;
-        OK (GxB_set (C, GxB_FORMAT, fmt)) ;
+        sparsity = gb_get_sparsity (A, NULL, sparsity) ;
+        C = gb_new (ctype, cnrows, cncols, fmt, sparsity) ;
     }
 
     //--------------------------------------------------------------------------
     // compute C<M> += A(I,J) or AT(I,J)
     //--------------------------------------------------------------------------
 
-    OK (GrB_extract (C, M, accum, A, I, ni, J, nj, desc)) ;
+    OK1 (C, GrB_Matrix_extract (C, M, accum, A, I, ni, J, nj, desc)) ;
 
     //--------------------------------------------------------------------------
     // free shallow copies
     //--------------------------------------------------------------------------
 
-    OK (GrB_free (&M)) ;
-    OK (GrB_free (&A)) ;
-    OK (GrB_free (&desc)) ;
+    OK (GrB_Matrix_free (&M)) ;
+    OK (GrB_Matrix_free (&A)) ;
+    OK (GrB_Descriptor_free (&desc)) ;
     if (I_allocated) gb_mxfree (&I) ;
     if (J_allocated) gb_mxfree (&J) ;
 
@@ -186,6 +187,7 @@ void mexFunction
     //--------------------------------------------------------------------------
 
     pargout [0] = gb_export (&C, kind) ;
+    pargout [1] = mxCreateDoubleScalar (kind) ;
     GB_WRAPUP ;
 }
 

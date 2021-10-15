@@ -1,6 +1,9 @@
 function test82
 %TEST82 test GrB_Matrix_extract with index range (hypersparse)
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 fprintf ('test82: test GrB_Matrix_extract with index range (hypersparse)\n') ;
 
 rng ('default') ;

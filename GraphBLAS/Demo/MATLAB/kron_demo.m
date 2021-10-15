@@ -3,6 +3,9 @@ function [C err] = kron_demo (A,B)
 % Usage:
 % [C err] = kron_demo (A,B)
 
+% SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+% SPDX-License-Identifier: Apache-2.0
+
 % write A to a file
 Afile = fopen ('A.tsv', 'w') ;
 [i j x] = find (A) ;

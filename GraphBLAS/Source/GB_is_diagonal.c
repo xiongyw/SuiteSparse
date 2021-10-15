@@ -2,8 +2,8 @@
 // GB_is_diagonal: check if A is a diagonal matrix
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -11,6 +11,7 @@
 // present.  All pending tuples are ignored.  Zombies are treated as entries.
 
 #include "GB_mxm.h"
+#include "GB_atomics.h"
 
 bool GB_is_diagonal             // true if A is diagonal
 (
@@ -24,7 +25,10 @@ bool GB_is_diagonal             // true if A is diagonal
     //--------------------------------------------------------------------------
 
     ASSERT (A != NULL) ;
-    ASSERT_OK (GB_check (A, "A check diag", GB0)) ;
+    ASSERT_MATRIX_OK (A, "A check diag", GB0) ;
+    ASSERT (!GB_ZOMBIES (A)) ;
+    ASSERT (GB_JUMBLED_OK (A)) ;
+    ASSERT (!GB_PENDING (A)) ;
 
     //--------------------------------------------------------------------------
     // trivial cases
@@ -36,6 +40,20 @@ bool GB_is_diagonal             // true if A is diagonal
     if (n != ncols)
     { 
         // A is rectangular
+        return (false) ;
+    }
+
+    if (GB_IS_BITMAP (A))
+    { 
+        // never treat bitmaps as diagonal
+        return (false) ;
+    }
+
+    if (GB_IS_FULL (A))
+    { 
+        // A is full, and is diagonal only if 1-by-1, but always return
+        // false so that GB_AxB_rowscale and GB_AxB_colscale are not used
+        // by GB_reduce_to_vector.
         return (false) ;
     }
 
@@ -71,8 +89,9 @@ bool GB_is_diagonal             // true if A is diagonal
 
     int diagonal = true ;
 
+    int tid ;
     #pragma omp parallel for num_threads(nthreads) schedule(dynamic,1)
-    for (int tid = 0 ; tid < ntasks ; tid++)
+    for (tid = 0 ; tid < ntasks ; tid++)
     {
 
         //----------------------------------------------------------------------
@@ -81,7 +100,7 @@ bool GB_is_diagonal             // true if A is diagonal
 
         int diag = true ;
         { 
-            #pragma omp atomic read
+            GB_ATOMIC_READ
             diag = diagonal ;
         }
         if (!diag) continue ;
@@ -115,7 +134,7 @@ bool GB_is_diagonal             // true if A is diagonal
 
         if (!diag)
         { 
-            #pragma omp atomic write
+            GB_ATOMIC_WRITE
             diagonal = false ;
         }
     }
@@ -124,7 +143,6 @@ bool GB_is_diagonal             // true if A is diagonal
     // return result
     //--------------------------------------------------------------------------
 
-    if (diagonal) A->nvec_nonempty = n ;
     return ((bool) diagonal) ;
 }
 

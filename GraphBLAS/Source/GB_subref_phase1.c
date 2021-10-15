@@ -2,8 +2,8 @@
 // GB_subref_phase1: find # of entries in C=A(I,J)
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
@@ -16,7 +16,9 @@
 
 GrB_Info GB_subref_phase1               // count nnz in each C(:,j)
 (
-    int64_t *restrict *Cp_handle,       // output of size Cnvec+1
+    // computed by phase1:
+    int64_t **Cp_handle,                // output of size Cnvec+1
+    size_t *Cp_size_handle,
     int64_t *Cnvec_nonempty,            // # of non-empty vectors in C
     // tasks from phase0b:
     GB_task_struct *restrict TaskList,  // array of structs
@@ -46,20 +48,22 @@ GrB_Info GB_subref_phase1               // count nnz in each C(:,j)
     //--------------------------------------------------------------------------
 
     ASSERT (Cp_handle != NULL) ;
-    ASSERT_OK (GB_check (A, "A for subref phase1", GB0)) ;
+    ASSERT (Cp_size_handle != NULL) ;
+    ASSERT_MATRIX_OK (A, "A for subref phase1", GB0) ;
+    ASSERT (!GB_IS_BITMAP (A)) ;    // GB_bitmap_subref is used instead
 
     //--------------------------------------------------------------------------
     // allocate the result
     //--------------------------------------------------------------------------
 
-    int64_t *restrict Cp = NULL ;
     (*Cp_handle) = NULL ;
-
-    GB_CALLOC_MEMORY (Cp, GB_IMAX (2, Cnvec+1), sizeof (int64_t)) ;
+    (*Cp_size_handle) = 0 ;
+    int64_t *restrict Cp = NULL ; size_t Cp_size = 0 ;
+    Cp = GB_CALLOC (GB_IMAX (2, Cnvec+1), int64_t, &Cp_size) ;
     if (Cp == NULL)
     { 
         // out of memory
-        return (GB_OUT_OF_MEMORY) ;
+        return (GrB_OUT_OF_MEMORY) ;
     }
 
     //--------------------------------------------------------------------------
@@ -68,13 +72,13 @@ GrB_Info GB_subref_phase1               // count nnz in each C(:,j)
 
     #define GB_PHASE_1_OF_2
     if (symbolic)
-    {
+    { 
         #define GB_SYMBOLIC
         #include "GB_subref_template.c"
         #undef  GB_SYMBOLIC
     }
     else
-    {
+    { 
         #define GB_NUMERIC
         #include "GB_subref_template.c"
         #undef  GB_NUMERIC
@@ -84,13 +88,15 @@ GrB_Info GB_subref_phase1               // count nnz in each C(:,j)
     // cumulative sum of Cp and fine tasks in TaskList
     //--------------------------------------------------------------------------
 
-    GB_task_cumsum (Cp, Cnvec, Cnvec_nonempty, TaskList, ntasks, nthreads) ;
+    GB_task_cumsum (Cp, Cnvec, Cnvec_nonempty, TaskList, ntasks, nthreads,
+        Context) ;
 
     //--------------------------------------------------------------------------
     // return the result
     //--------------------------------------------------------------------------
 
     (*Cp_handle) = Cp ;
+    (*Cp_size_handle) = Cp_size ;
     return (GrB_SUCCESS) ;
 }
 

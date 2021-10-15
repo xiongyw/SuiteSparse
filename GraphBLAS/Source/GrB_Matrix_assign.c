@@ -1,13 +1,14 @@
 //------------------------------------------------------------------------------
-// GrB_Matrix_assign:    C<M>(Rows,Cols) = accum (C(Rows,Cols),A) or A'
+// GrB_Matrix_assign: C<M>(Rows,Cols) = accum (C(Rows,Cols),A) or A'
 //------------------------------------------------------------------------------
 
-// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2019, All Rights Reserved.
-// http://suitesparse.com   See GraphBLAS/Doc/License.txt for license.
+// SuiteSparse:GraphBLAS, Timothy A. Davis, (c) 2017-2021, All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
 
 #include "GB_assign.h"
+#include "GB_bitmap_assign.h"
 
 GrB_Info GrB_Matrix_assign          // C<M>(Rows,Cols) += A or A'
 (
@@ -27,30 +28,35 @@ GrB_Info GrB_Matrix_assign          // C<M>(Rows,Cols) += A or A'
     // check inputs
     //--------------------------------------------------------------------------
 
-    GB_WHERE ("GrB_Matrix_assign"
+    GB_WHERE (C, "GrB_Matrix_assign"
         " (C, M, accum, A, Rows, nRows, Cols, nCols, desc)") ;
+    GB_BURBLE_START ("GrB_assign") ;
 
     GB_RETURN_IF_NULL_OR_FAULTY (C) ;
     GB_RETURN_IF_FAULTY (M) ;
     GB_RETURN_IF_NULL_OR_FAULTY (A) ;
 
     // get the descriptor
-    GB_GET_DESCRIPTOR (info, desc, C_replace, Mask_comp, A_transpose, xx1, xx2);
+    GB_GET_DESCRIPTOR (info, desc, C_replace, Mask_comp, Mask_struct,
+        A_transpose, xx1, xx2, xx7) ;
 
     //--------------------------------------------------------------------------
     // C<M>(Rows,Cols) = accum (C(Rows,Cols), A) and variations
     //--------------------------------------------------------------------------
 
-    return (GB_assign (
+    info = GB_assign (
         C,          C_replace,      // C matrix and its descriptor
-        M,          Mask_comp,      // mask matrix and its descriptor
+        M, Mask_comp, Mask_struct,  // mask matrix and its descriptor
         false,                      // do not transpose the mask
         accum,                      // for accum (C(Rows,Cols),A)
         A,          A_transpose,    // A and its descriptor (T=A or A')
         Rows, nRows,                // row indices
         Cols, nCols,                // column indices
         false, NULL, GB_ignore_code,// no scalar expansion
-        false, false,               // not GrB_Col_assign nor GrB_row_assign
-        Context)) ;
+        GB_ASSIGN,
+        Context) ;
+
+    GB_BURBLE_END ;
+    return (info) ;
 }
 
